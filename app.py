@@ -74,7 +74,7 @@ with tab2:
     
     if not cal_df.empty:
         # Sort so users see logical grouping
-        st.table(cal_df.sort_values(by="Frequency"))
+        st.table(cal_df.sort_values(by="frequency"))
     else:
         st.info("Your calendar is currently empty. Use the form above to add your first task.")
     
