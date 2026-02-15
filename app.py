@@ -46,26 +46,32 @@ with tab1:
     st.header("Field Audit & Punch List")
     
     with st.form("audit_entry"):
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3) # Changed to 3 columns
         with col1:
             cat = st.selectbox("System Category", ["Mechanical", "Envelope", "Aesthetics", "Safety"])
             item = st.text_input("Observation/Task")
         with col2:
             stat = st.selectbox("Current Status", ["Resolved", "Pending", "Needs Attention"])
             impact = st.select_slider("Impact on Asset Health", options=["Low", "Medium", "High"])
+        with col3:
+            # NEW: Date picker for the due date
+            due_date = st.date_input("Target Completion Date", value=datetime.now())
         
-        # This button MUST be indented to stay inside the form
         if st.form_submit_button("Log Weekly Finding"):
-            # 1. Pull current data from Sheets
             df = get_data("punch_list")
-            # 2. Create new row
-            new_row = pd.DataFrame([{"date": datetime.now().strftime("%Y-%m-%d"), "category": cat, "item": item, "status": stat, "impact": impact}])
-            # 3. Combine and save
+            # Added due_date to the new row dictionary
+            new_row = pd.DataFrame([{
+                "date": datetime.now().strftime("%Y-%m-%d"), 
+                "category": cat, 
+                "item": item, 
+                "status": stat, 
+                "impact": impact,
+                "due_date": due_date.strftime("%Y-%m-%d")
+            }])
             updated_df = pd.concat([df, new_row], ignore_index=True)
             save_data(updated_df, "punch_list")
-            st.success("Finding logged to Google Sheets!")
+            st.success(f"Finding logged! Target: {due_date.strftime('%b %d')}")
             st.rerun()
-
     st.markdown("### Recent Activity")
     try:
         # Using our new direct function
@@ -119,45 +125,42 @@ with tab2:
         st.info("Your calendar is currently empty. Use the form above to add your first task.")
     
 with tab3:
-    st.header(f"Executive Status Report: {datetime.now().strftime('%B %Y')}")
+    st.header(f"Executive Stewardship Report: {datetime.now().strftime('%B %Y')}")
     
     try:
-        # 1. Fetch the latest data
         all_data = get_data("punch_list")
         
         if not all_data.empty:
-            # 2. DATA LOGIC
+            # 1. LOGIC & CALCULATIONS
             total_items = len(all_data)
             urgent_count = len(all_data[all_data['status'] == 'Needs Attention'])
             resolved_count = len(all_data[all_data['status'] == 'Resolved'])
             completion_rate = (resolved_count / total_items) * 100 if total_items > 0 else 0
 
-            # 3. DYNAMIC EXECUTIVE SUMMARY
+            # 2. EXECUTIVE SUMMARY BOX
             if urgent_count > 0:
-                st.info(f"**Current Status:** Stewardship activities are ongoing. We have identified **{urgent_count}** items requiring your review or budget approval. All other systems are performing within normal parameters.")
+                st.info(f"**Current Status:** Stewardship activities are ongoing. We are currently managing **{urgent_count}** open action items. Systems not listed below are performing within normal parameters.")
             else:
-                st.success("**Current Status:** All property systems are currently stable. Maintenance is up to date, and no capital expenditures are recommended at this time.")
+                st.success("**Current Status:** All property systems are currently stable. Maintenance is up to date with 100% completion rate for this period.")
 
-            st.divider()
-
-            # 4. TOP LEVEL METRICS (The "Health Gauge")
+            # 3. TOP LEVEL METRICS
             m1, m2, m3 = st.columns(3)
             m1.metric("Total Observations", total_items)
             m2.metric("Items Resolved", resolved_count)
-            # We color the health score: it turns 'normal' (green/black) or 'inverse' (red) based on completion
-            m3.metric("Asset Health Score", f"{int(completion_rate)}%", delta=f"{int(completion_rate)-100}% from Ideal")
+            m3.metric("Asset Health Score", f"{int(completion_rate)}%")
 
             st.divider()
 
-            # 5. THE STATUS BOARD
+            # 4. THE STATUS BOARD
             col_a, col_b, col_c = st.columns(3)
             
             with col_a:
-                st.markdown("### 🟢 THE GOOD")
+                st.markdown("### 🟢 RESOLVED")
                 resolved = all_data[all_data['status'] == 'Resolved']
                 if not resolved.empty:
                     for _, row in resolved.tail(5).iterrows():
                         st.write(f"✅ **{row['category']}:** {row['item']}")
+                        st.caption(f"Completed: {row['date']}")
                 else:
                     st.write("No items resolved this period.")
                     
@@ -167,6 +170,7 @@ with tab3:
                 if not pending.empty:
                     for _, row in pending.tail(5).iterrows():
                         st.write(f"⏳ **{row['category']}:** {row['item']}")
+                        st.caption(f"Target: {row['due_date']}")
                 else:
                     st.write("All systems clear.")
                     
@@ -175,14 +179,29 @@ with tab3:
                 critical = all_data[all_data['status'] == 'Needs Attention']
                 if not critical.empty:
                     for _, row in critical.iterrows():
-                        prefix = "🚨" if row['impact'] == 'High' else "⚠️"
+                        # --- OVERDUE CALCULATION ---
+                        try:
+                            target = pd.to_datetime(row['due_date']).date()
+                            today = datetime.now().date()
+                            days_diff = (today - target).days
+                            
+                            if days_diff > 0:
+                                # Highlight overdue in Red text for the dashboard
+                                overdue_label = f":red[**{days_diff} DAYS OVERDUE**]"
+                            else:
+                                overdue_label = f"Target: {target.strftime('%b %d')}"
+                        except:
+                            overdue_label = "Target: TBD"
+
+                        prefix = "🚨" if row['impact'] == "High" else "⚠️"
                         st.write(f"{prefix} **{row['category']}:** {row['item']}")
+                        st.caption(overdue_label)
+                        st.divider()
                 else:
                     st.write("No urgent actions needed.")
 
-            # 6. SYSTEM BREAKDOWN CHART
-            st.divider()
-            st.subheader("Field Observation Distribution")
+            # 5. VISUAL DISTRIBUTION
+            st.subheader("System Workload Breakdown")
             category_counts = all_data['category'].value_counts()
             st.bar_chart(category_counts)
 
