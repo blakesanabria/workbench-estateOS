@@ -17,7 +17,7 @@ conn = init_db()
 
 # --- APP LAYOUT ---
 st.set_page_config(page_title="Workbench Group | Estate OS", layout="wide")
-st.title("Stewardship Portal: 3739 Knollwood Dr")
+st.title("Management Portal: 3739 Knollwood Dr")
 
 tab1, tab2, tab3 = st.tabs(["Weekly Field Entry", "Master Maintenance Calendar", "Executive Scorecard"])
 
@@ -44,8 +44,8 @@ with tab1:
     st.table(history)
     
 with tab2:
-    st.header("52-Week Stewardship Guidelines")
-    st.info("Guideline for Tom & Blake: Professional standards for 3739 Knollwood.")
+    st.header("52-Week Maintenance Calendar")
+    st.info("Guideline for standards for 3739 Knollwood.")
 
     # Hardcoded Guidelines (The "North Star")
     calendar_data = {
@@ -76,7 +76,6 @@ with tab2:
     st.table(filtered_df)
 
     st.markdown("---")
-    st.caption("Standard Operating Procedures based on 51 years of construction wisdom.")
     
 with tab3:
     st.header(f"Executive Scorecard: {datetime.now().strftime('%B %Y')}")
