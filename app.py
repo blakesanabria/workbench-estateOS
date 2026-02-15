@@ -119,21 +119,65 @@ with tab2:
         st.info("Your calendar is currently empty. Use the form above to add your first task.")
     
 with tab3:
-    st.header(f"Executive Scorecard: {datetime.now().strftime('%B %Y')}")
-    all_data = get_data("punch_list")
-    col_a, col_b, col_c = st.columns(3)
+    st.header(f"Executive Stewardship Report: {datetime.now().strftime('%B %Y')}")
     
-    with col_a:
-        st.success("### 🟢 THE GOOD")
-        resolved = all_data[all_data['status'] == 'Resolved']['item'].tolist()
-        for i in resolved[-4:]: st.write(f"**Fixed:** {i}")
+    try:
+        all_data = get_data("punch_list")
+        
+        if not all_data.empty:
+            # 1. TOP LEVEL METRICS
+            total_items = len(all_data)
+            resolved_count = len(all_data[all_data['status'] == 'Resolved'])
+            completion_rate = (resolved_count / total_items) * 100 if total_items > 0 else 0
             
-    with col_b:
-        st.warning("### 🟡 CAUTION")
-        pending = all_data[all_data['status'] == 'Pending']['item'].tolist()
-        for i in pending[-4:]: st.write(f"**Monitoring:** {i}")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Total Observations", total_items)
+            m2.metric("Items Resolved", resolved_count)
+            m3.metric("Asset Health Score", f"{int(completion_rate)}%")
+
+            st.divider()
+
+            # 2. STATUS COLUMNS
+            col_a, col_b, col_c = st.columns(3)
             
-    with col_c:
-        st.error("### 🔴 ACTION REQUIRED")
-        critical = all_data[all_data['status'] == 'Needs Attention']['item'].tolist()
-        for i in critical[-4:]: st.write(f"**Urgent:** {i}")
+            with col_a:
+                st.success("### 🟢 THE GOOD")
+                resolved = all_data[all_data['status'] == 'Resolved']
+                if not resolved.empty:
+                    for _, row in resolved.tail(5).iterrows():
+                        st.write(f"✅ **{row['category']}:** {row['item']}")
+                else:
+                    st.write("No items resolved this period.")
+                    
+            with col_b:
+                st.warning("### 🟡 MONITORING")
+                pending = all_data[all_data['status'] == 'Pending']
+                if not pending.empty:
+                    for _, row in pending.tail(5).iterrows():
+                        st.write(f"⏳ **{row['category']}:** {row['item']}")
+                else:
+                    st.write("All systems clear.")
+                    
+            with col_c:
+                st.error("### 🔴 ACTION REQUIRED")
+                critical = all_data[all_data['status'] == 'Needs Attention']
+                if not critical.empty:
+                    for _, row in critical.iterrows():
+                        # High impact items get a bold warning
+                        prefix = "🚨" if row['impact'] == 'High' else "⚠️"
+                        st.write(f"{prefix} **{row['category']}:** {row['item']}")
+                else:
+                    st.write("No urgent actions needed.")
+
+            # 3. VISUAL BREAKDOWN
+            st.divider()
+            st.subheader("System Health Distribution")
+            # This creates a small chart showing where you are spending your time
+            category_counts = all_data['category'].value_counts()
+            st.bar_chart(category_counts)
+
+        else:
+            st.info("Log your first field entry in Tab 1 to generate the scorecard.")
+            
+    except Exception as e:
+        st.error(f"Scorecard Error: {e}")
