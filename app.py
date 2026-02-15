@@ -119,7 +119,7 @@ with tab2:
 
     # --- DISPLAY THE CALENDAR FROM DATABASE ---
     st.markdown("---")
-    cal_df = pd.read_sql("SELECT frequency, system, task, instructions FROM master_calendar", conn)
+    cal_df = get_data("master_calendar")
     
     if not cal_df.empty:
         # Sort so users see logical grouping
@@ -129,7 +129,7 @@ with tab2:
     
 with tab3:
     st.header(f"Executive Scorecard: {datetime.now().strftime('%B %Y')}")
-    all_data = pd.read_sql("SELECT * FROM punch_list", conn)
+    all_data = get_data("punch_list")
     col_a, col_b, col_c = st.columns(3)
     
     with col_a:
