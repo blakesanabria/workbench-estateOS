@@ -26,18 +26,23 @@ if not check_password():
     st.stop()
 
 # --- 2. GOOGLE SHEETS CONNECTION (BYPASS METHOD) ---
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-# PASTE YOUR FULL GOOGLE SHEET URL BETWEEN THE QUOTES BELOW
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1wOU3UAX89VOshu42bnB4A9AqoUe6dNp-TjsZGDhtozQ/edit?usp=sharing"
+SHEET_ID = "1wOU3UAX89VOshu42bnB4A9AqoUe6dNp-TjsZGDhtozQ" 
 
 def get_data(worksheet):
-    # This explicitly points to the URL, bypassing the Secrets file for the link
-    return conn.read(spreadsheet=SHEET_URL, worksheet=worksheet, ttl="1s")
+    if worksheet == "punch_list":
+        # Usually gid=0 for the first tab
+        url = f"https://docs.google.com/spreadsheets/d/1wOU3UAX89VOshu42bnB4A9AqoUe6dNp-TjsZGDhtozQ/export?format=csv&gid=0"
+    else:
+        # REPLACE '123456' with the gid from your Master Calendar tab URL
+        url = f"https://docs.google.com/spreadsheets/d/1wOU3UAX89VOshu42bnB4A9AqoUe6dNp-TjsZGDhtozQ/export?format=csv&gid=63964639"
+    return pd.read_csv(url)
+
+# Note: We will keep using the 'conn' logic ONLY for saving 
+# because it handles the "Write" permission better.
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 def save_data(df, worksheet):
-    # This ensures the update goes to the correct spreadsheet
-    conn.update(spreadsheet=SHEET_URL, worksheet=worksheet, data=df)
+    conn.update(worksheet=worksheet, data=df)
     st.cache_data.clear()
     
 # --- 3. APP LAYOUT ---
@@ -71,12 +76,16 @@ with tab1:
             st.rerun()
 
     st.markdown("### Recent Activity")
-    # Updated to pull from Google Sheets instead of SQL
-    history = get_data("punch_list")
-    if not history.empty:
-        st.table(history.tail(5))
-    else:
-        st.info("No activity logged yet.")
+    try:
+        # Using our new direct function
+        history = get_data("punch_list")
+        if not history.empty:
+            # Show the last 5 entries
+            st.table(history.tail(5))
+        else:
+            st.info("No activity logged yet.")
+    except Exception as e:
+        st.error(f"Waiting for Google Sheets connection... {e}")
     
 with tab2:
     st.header("52-Week Maintenance Calendar")
