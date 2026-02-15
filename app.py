@@ -26,6 +26,7 @@ tab1, tab2, tab3 = st.tabs(["Weekly Field Entry", "Master Maintenance Calendar",
 
 with tab1:
     st.header("Field Audit & Punch List")
+    
     with st.form("audit_entry"):
         col1, col2 = st.columns(2)
         with col1:
@@ -35,8 +36,9 @@ with tab1:
             stat = st.selectbox("Current Status", ["Resolved", "Pending", "Needs Attention"])
             impact = st.select_slider("Impact on Asset Health", options=["Low", "Medium", "High"])
         
-if st.form_submit_button("Log Weekly Finding"):
-            # 1. Pull current data
+        # This button MUST be indented to stay inside the form
+        if st.form_submit_button("Log Weekly Finding"):
+            # 1. Pull current data from Sheets
             df = get_data("punch_list")
             # 2. Create new row
             new_row = pd.DataFrame([{"date": datetime.now().strftime("%Y-%m-%d"), "category": cat, "item": item, "status": stat, "impact": impact}])
@@ -44,10 +46,15 @@ if st.form_submit_button("Log Weekly Finding"):
             updated_df = pd.concat([df, new_row], ignore_index=True)
             save_data(updated_df, "punch_list")
             st.success("Finding logged to Google Sheets!")
+            st.rerun()
 
     st.markdown("### Recent Activity")
-    history = pd.read_sql("SELECT date, category, item, status FROM punch_list ORDER BY id DESC LIMIT 5", conn)
-    st.table(history)
+    # Updated to pull from Google Sheets instead of SQL
+    history = get_data("punch_list")
+    if not history.empty:
+        st.table(history.tail(5))
+    else:
+        st.info("No activity logged yet.")
     
 with tab2:
     st.header("52-Week Maintenance Calendar")
