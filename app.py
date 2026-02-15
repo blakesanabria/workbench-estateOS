@@ -25,21 +25,12 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- 2. GOOGLE SHEETS CONNECTION (BYPASS METHOD) ---
-SHEET_ID = "1wOU3UAX89VOshu42bnB4A9AqoUe6dNp-TjsZGDhtozQ" 
+# --- 2. SECURE DATA CONNECTION ---
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data(worksheet):
-    if worksheet == "punch_list":
-        # Usually gid=0 for the first tab
-        url = f"https://docs.google.com/spreadsheets/d/1wOU3UAX89VOshu42bnB4A9AqoUe6dNp-TjsZGDhtozQ/export?format=csv&gid=0"
-    else:
-        # REPLACE '123456' with the gid from your Master Calendar tab URL
-        url = f"https://docs.google.com/spreadsheets/d/1wOU3UAX89VOshu42bnB4A9AqoUe6dNp-TjsZGDhtozQ/export?format=csv&gid=63964639"
-    return pd.read_csv(url)
-
-# Note: We will keep using the 'conn' logic ONLY for saving 
-# because it handles the "Write" permission better.
-conn = st.connection("gsheets", type=GSheetsConnection)
+    # The connection now handles the URL and Credentials automatically from Secrets
+    return conn.read(worksheet=worksheet, ttl="1s")
 
 def save_data(df, worksheet):
     conn.update(worksheet=worksheet, data=df)
