@@ -19,7 +19,7 @@ conn = init_db()
 st.set_page_config(page_title="Workbench Group | Estate OS", layout="wide")
 st.title("Stewardship Portal: 3739 Knollwood Dr")
 
-tab1, tab2 = st.tabs(["Weekly Field Entry", "Monthly Executive Scorecard"])
+tab1, tab2, tab3 = st.tabs(["Weekly Field Entry", "Master Maintenance Calendar", "Executive Scorecard"])
 
 with tab1:
     st.header("Field Audit & Punch List")
@@ -42,8 +42,43 @@ with tab1:
     st.markdown("### Recent Activity")
     history = pd.read_sql("SELECT date, category, item, status FROM punch_list ORDER BY id DESC LIMIT 5", conn)
     st.table(history)
-
+    
 with tab2:
+    st.header("52-Week Stewardship Guidelines")
+    st.info("Guideline for Tom & Blake: Professional standards for 3739 Knollwood.")
+
+    # Hardcoded Guidelines (The "North Star")
+    calendar_data = {
+        "Frequency": ["Monthly", "Quarterly", "Bi-Annual", "Annual", "Annual"],
+        "System": ["Mechanical", "Envelope", "Site", "Life Safety", "Aesthetics"],
+        "Task": [
+            "HVAC Filter Audit & Condensate Line Flush",
+            "Building Envelope Scan (Masonry/Sealants)",
+            "Irrigation 'Wet Test' & Zone Calibration",
+            "Generator Full-Load Test & Fluid Check",
+            "Stone/Marble Sealant Integrity Audit"
+        ],
+        "Special Instructions": [
+            "Check all 5 zones; confirm 48-50% RH.",
+            "Inspect North-facing stucco for hairline cracks.",
+            "Adjust heads for seasonal wind patterns.",
+            "Verify remote monitoring is active.",
+            "Focus on high-use kitchen & master bath surfaces."
+        ]
+    }
+    
+    df_cal = pd.DataFrame(calendar_data)
+    
+    # Filter by Frequency for quick viewing
+    freq_filter = st.multiselect("Filter by Frequency", options=["Monthly", "Quarterly", "Bi-Annual", "Annual"], default=["Monthly", "Quarterly"])
+    filtered_df = df_cal[df_cal["Frequency"].isin(freq_filter)]
+    
+    st.table(filtered_df)
+
+    st.markdown("---")
+    st.caption("Standard Operating Procedures based on 51 years of construction wisdom.")
+    
+with tab3:
     st.header(f"Executive Scorecard: {datetime.now().strftime('%B %Y')}")
     all_data = pd.read_sql("SELECT * FROM punch_list", conn)
     col_a, col_b, col_c = st.columns(3)
