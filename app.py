@@ -4,19 +4,23 @@ import sqlite3
 from datetime import datetime
 
 # --- DATABASE SETUP ---
+# --- DATABASE SETUP ---
 def init_db():
-    conn = init_db()
+
+    conn = sqlite3.connect('workbench_estate.db', check_same_thread=False)
     c = conn.cursor()
-    # Table 1: Your activity logs
+
     c.execute('''CREATE TABLE IF NOT EXISTS punch_list 
                  (id INTEGER PRIMARY KEY, date TEXT, category TEXT, 
                   item TEXT, status TEXT, impact TEXT)''')
-    # Table 2: Your master calendar guidelines (The New Part)
+
     c.execute('''CREATE TABLE IF NOT EXISTS master_calendar 
                  (id INTEGER PRIMARY KEY, frequency TEXT, system TEXT, 
                   task TEXT, instructions TEXT)''')
     conn.commit()
     return conn
+
+conn = init_db()
 
 # --- APP LAYOUT ---
 st.set_page_config(page_title="Workbench Group | Estate OS", layout="wide")
