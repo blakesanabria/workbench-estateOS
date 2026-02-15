@@ -25,16 +25,21 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- 2. GOOGLE SHEETS CONNECTION ---
+# --- 2. GOOGLE SHEETS CONNECTION (BYPASS METHOD) ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+# PASTE YOUR FULL GOOGLE SHEET URL BETWEEN THE QUOTES BELOW
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1wOU3UAX89VOshu42bnB4A9AqoUe6dNp-TjsZGDhtozQ/edit?usp=sharing"
+
 def get_data(worksheet):
-    return conn.read(worksheet=worksheet, ttl="1m")
+    # This explicitly points to the URL, bypassing the Secrets file for the link
+    return conn.read(spreadsheet=SHEET_URL, worksheet=worksheet, ttl="1s")
 
 def save_data(df, worksheet):
-    conn.update(worksheet=worksheet, data=df)
+    # This ensures the update goes to the correct spreadsheet
+    conn.update(spreadsheet=SHEET_URL, worksheet=worksheet, data=df)
     st.cache_data.clear()
-
+    
 # --- 3. APP LAYOUT ---
 st.set_page_config(page_title="Workbench Group | Estate OS", layout="wide")
 st.title("Maintenance Portal: 3739 Knollwood Dr")
