@@ -24,7 +24,7 @@ conn = init_db()
 
 # --- APP LAYOUT ---
 st.set_page_config(page_title="Workbench Group | Estate OS", layout="wide")
-st.title("Stewardship Portal: 3739 Knollwood Dr")
+st.title("Management Portal: 3739 Knollwood Dr")
 
 tab1, tab2, tab3 = st.tabs(["Weekly Field Entry", "Master Maintenance Calendar", "Executive Scorecard"])
 
