@@ -119,29 +119,41 @@ with tab2:
         st.info("Your calendar is currently empty. Use the form above to add your first task.")
     
 with tab3:
-    st.header(f"Executive Stewardship Report: {datetime.now().strftime('%B %Y')}")
+    st.header(f"Executive Status Report: {datetime.now().strftime('%B %Y')}")
     
     try:
+        # 1. Fetch the latest data
         all_data = get_data("punch_list")
         
         if not all_data.empty:
-            # 1. TOP LEVEL METRICS
+            # 2. DATA LOGIC
             total_items = len(all_data)
+            urgent_count = len(all_data[all_data['status'] == 'Needs Attention'])
             resolved_count = len(all_data[all_data['status'] == 'Resolved'])
             completion_rate = (resolved_count / total_items) * 100 if total_items > 0 else 0
-            
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Total Observations", total_items)
-            m2.metric("Items Resolved", resolved_count)
-            m3.metric("Asset Health Score", f"{int(completion_rate)}%")
+
+            # 3. DYNAMIC EXECUTIVE SUMMARY
+            if urgent_count > 0:
+                st.info(f"**Current Status:** Stewardship activities are ongoing. We have identified **{urgent_count}** items requiring your review or budget approval. All other systems are performing within normal parameters.")
+            else:
+                st.success("**Current Status:** All property systems are currently stable. Maintenance is up to date, and no capital expenditures are recommended at this time.")
 
             st.divider()
 
-            # 2. STATUS COLUMNS
+            # 4. TOP LEVEL METRICS (The "Health Gauge")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Total Observations", total_items)
+            m2.metric("Items Resolved", resolved_count)
+            # We color the health score: it turns 'normal' (green/black) or 'inverse' (red) based on completion
+            m3.metric("Asset Health Score", f"{int(completion_rate)}%", delta=f"{int(completion_rate)-100}% from Ideal")
+
+            st.divider()
+
+            # 5. THE STATUS BOARD
             col_a, col_b, col_c = st.columns(3)
             
             with col_a:
-                st.success("### 🟢 THE GOOD")
+                st.markdown("### 🟢 THE GOOD")
                 resolved = all_data[all_data['status'] == 'Resolved']
                 if not resolved.empty:
                     for _, row in resolved.tail(5).iterrows():
@@ -150,7 +162,7 @@ with tab3:
                     st.write("No items resolved this period.")
                     
             with col_b:
-                st.warning("### 🟡 MONITORING")
+                st.markdown("### 🟡 MONITORING")
                 pending = all_data[all_data['status'] == 'Pending']
                 if not pending.empty:
                     for _, row in pending.tail(5).iterrows():
@@ -159,20 +171,18 @@ with tab3:
                     st.write("All systems clear.")
                     
             with col_c:
-                st.error("### 🔴 ACTION REQUIRED")
+                st.markdown("### 🔴 ACTION REQUIRED")
                 critical = all_data[all_data['status'] == 'Needs Attention']
                 if not critical.empty:
                     for _, row in critical.iterrows():
-                        # High impact items get a bold warning
                         prefix = "🚨" if row['impact'] == 'High' else "⚠️"
                         st.write(f"{prefix} **{row['category']}:** {row['item']}")
                 else:
                     st.write("No urgent actions needed.")
 
-            # 3. VISUAL BREAKDOWN
+            # 6. SYSTEM BREAKDOWN CHART
             st.divider()
-            st.subheader("System Health Distribution")
-            # This creates a small chart showing where you are spending your time
+            st.subheader("Field Observation Distribution")
             category_counts = all_data['category'].value_counts()
             st.bar_chart(category_counts)
 
