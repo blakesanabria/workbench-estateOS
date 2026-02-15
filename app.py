@@ -51,10 +51,10 @@ with tab1:
     st.table(history)
     
 with tab2:
-    st.header("52-Week Stewardship Guidelines")
+    st.header("52-Week Maintenance Calendar")
     
     # --- FORM TO ADD NEW TASKS ---
-    with st.expander("➕ Add New Guideline Task"):
+    with st.expander("➕ Add New Maintenance Task"):
         with st.form("new_calendar_task"):
             f_freq = st.selectbox("Frequency", ["Monthly", "Quarterly", "Bi-Annual", "Annual"])
             f_sys = st.selectbox("System", ["Mechanical", "Envelope", "Site", "Life Safety", "Aesthetics"])
