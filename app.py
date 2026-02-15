@@ -74,11 +74,11 @@ with tab1:
             st.rerun()
     st.markdown("### Recent Activity")
     try:
-        # Using our new direct function
         history = get_data("punch_list")
         if not history.empty:
-            # Show the last 5 entries
-            st.table(history.tail(5))
+            # We only show the columns we want to see
+            display_cols = ["date", "category", "item", "status", "due_date"]
+            st.table(history[display_cols].tail(5))
         else:
             st.info("No activity logged yet.")
     except Exception as e:
