@@ -5,7 +5,7 @@ from datetime import datetime
 
 # --- DATABASE SETUP ---
 def init_db():
-    conn = sqlite3.connect('workbench_estate.db')
+    conn = init_db()
     c = conn.cursor()
     # Table 1: Your activity logs
     c.execute('''CREATE TABLE IF NOT EXISTS punch_list 
