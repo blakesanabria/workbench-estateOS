@@ -1,26 +1,43 @@
 import streamlit as st
 import pandas as pd
-import sqlite3
 from datetime import datetime
-
-# --- DATABASE SETUP ---
-# --- DATABASE SETUP ---
 from streamlit_gsheets import GSheetsConnection
 
-# --- GOOGLE SHEETS CONNECTION ---
+# --- 1. LOGIN SECURITY ---
+def check_password():
+    if "password_correct" not in st.session_state:
+        st.session_state["password_correct"] = False
+
+    if st.session_state["password_correct"]:
+        return True
+
+    # Password input UI
+    st.title("Workbench Group | Estate OS")
+    password = st.text_input("Enter Workbench Access Key", type="password")
+    if st.button("Unlock Dashboard"):
+        if password == st.secrets["access_password"]:
+            st.session_state["password_correct"] = True
+            st.rerun()
+        else:
+            st.error("Access Denied")
+    return False
+
+if not check_password():
+    st.stop()
+
+# --- 2. GOOGLE SHEETS CONNECTION ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Helper to read data
 def get_data(worksheet):
     return conn.read(worksheet=worksheet, ttl="1m")
 
-# Helper to save data
 def save_data(df, worksheet):
     conn.update(worksheet=worksheet, data=df)
     st.cache_data.clear()
-# --- APP LAYOUT ---
+
+# --- 3. APP LAYOUT ---
 st.set_page_config(page_title="Workbench Group | Estate OS", layout="wide")
-st.title("Management Portal: 3739 Knollwood Dr")
+st.title("Maintenance Portal: 3739 Knollwood Dr")
 
 tab1, tab2, tab3 = st.tabs(["Weekly Field Entry", "Master Maintenance Calendar", "Executive Scorecard"])
 
