@@ -5,23 +5,19 @@ from datetime import datetime
 
 # --- DATABASE SETUP ---
 # --- DATABASE SETUP ---
-def init_db():
+from streamlit_gsheets import GSheetsConnection
 
-    conn = sqlite3.connect('workbench_estate.db', check_same_thread=False)
-    c = conn.cursor()
+# --- GOOGLE SHEETS CONNECTION ---
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-    c.execute('''CREATE TABLE IF NOT EXISTS punch_list 
-                 (id INTEGER PRIMARY KEY, date TEXT, category TEXT, 
-                  item TEXT, status TEXT, impact TEXT)''')
+# Helper to read data
+def get_data(worksheet):
+    return conn.read(worksheet=worksheet, ttl="1m")
 
-    c.execute('''CREATE TABLE IF NOT EXISTS master_calendar 
-                 (id INTEGER PRIMARY KEY, frequency TEXT, system TEXT, 
-                  task TEXT, instructions TEXT)''')
-    conn.commit()
-    return conn
-
-conn = init_db()
-
+# Helper to save data
+def save_data(df, worksheet):
+    conn.update(worksheet=worksheet, data=df)
+    st.cache_data.clear()
 # --- APP LAYOUT ---
 st.set_page_config(page_title="Workbench Group | Estate OS", layout="wide")
 st.title("Management Portal: 3739 Knollwood Dr")
@@ -39,12 +35,15 @@ with tab1:
             stat = st.selectbox("Current Status", ["Resolved", "Pending", "Needs Attention"])
             impact = st.select_slider("Impact on Asset Health", options=["Low", "Medium", "High"])
         
-        if st.form_submit_button("Log Weekly Finding"):
-            c = conn.cursor()
-            c.execute("INSERT INTO punch_list (date, category, item, status, impact) VALUES (?,?,?,?,?)",
-                      (datetime.now().strftime("%Y-%m-%d"), cat, item, stat, impact))
-            conn.commit()
-            st.success("Finding logged to Estate History.")
+if st.form_submit_button("Log Weekly Finding"):
+            # 1. Pull current data
+            df = get_data("punch_list")
+            # 2. Create new row
+            new_row = pd.DataFrame([{"date": datetime.now().strftime("%Y-%m-%d"), "category": cat, "item": item, "status": stat, "impact": impact}])
+            # 3. Combine and save
+            updated_df = pd.concat([df, new_row], ignore_index=True)
+            save_data(updated_df, "punch_list")
+            st.success("Finding logged to Google Sheets!")
 
     st.markdown("### Recent Activity")
     history = pd.read_sql("SELECT date, category, item, status FROM punch_list ORDER BY id DESC LIMIT 5", conn)
@@ -62,11 +61,23 @@ with tab2:
             f_inst = st.text_area("Special Instructions")
             
             if st.form_submit_button("Save to Master Calendar"):
-                c = conn.cursor()
-                c.execute("INSERT INTO master_calendar (frequency, system, task, instructions) VALUES (?,?,?,?)",
-                          (f_freq, f_sys, f_task, f_inst))
-                conn.commit()
-                st.success("Guideline Added!")
+                # 1. Fetch current guidelines
+                existing_cal = get_data("master_calendar")
+                
+                # 2. Create new row with Calendar headers
+                new_task = pd.DataFrame([{
+                    "frequency": f_freq, 
+                    "system": f_sys, 
+                    "task": f_task, 
+                    "instructions": f_inst
+                }])
+                
+                # 3. Merge and Save to the 'master_calendar' worksheet
+                updated_cal = pd.concat([existing_cal, new_task], ignore_index=True)
+                save_data(updated_cal, "master_calendar")
+                
+                st.success("Guideline Added to Google Sheets!")
+                st.rerun()
 
     # --- DISPLAY THE CALENDAR FROM DATABASE ---
     st.markdown("---")
