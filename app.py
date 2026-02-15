@@ -7,17 +7,20 @@ from datetime import datetime
 def init_db():
     conn = sqlite3.connect('workbench_estate.db')
     c = conn.cursor()
+    # Table 1: Your activity logs
     c.execute('''CREATE TABLE IF NOT EXISTS punch_list 
                  (id INTEGER PRIMARY KEY, date TEXT, category TEXT, 
                   item TEXT, status TEXT, impact TEXT)''')
+    # Table 2: Your master calendar guidelines (The New Part)
+    c.execute('''CREATE TABLE IF NOT EXISTS master_calendar 
+                 (id INTEGER PRIMARY KEY, frequency TEXT, system TEXT, 
+                  task TEXT, instructions TEXT)''')
     conn.commit()
     return conn
 
-conn = init_db()
-
 # --- APP LAYOUT ---
 st.set_page_config(page_title="Workbench Group | Estate OS", layout="wide")
-st.title("Management Portal: 3739 Knollwood Dr")
+st.title("Stewardship Portal: 3739 Knollwood Dr")
 
 tab1, tab2, tab3 = st.tabs(["Weekly Field Entry", "Master Maintenance Calendar", "Executive Scorecard"])
 
@@ -44,38 +47,32 @@ with tab1:
     st.table(history)
     
 with tab2:
-    st.header("52-Week Maintenance Calendar")
-    st.info("Guideline for standards for 3739 Knollwood.")
+    st.header("52-Week Stewardship Guidelines")
+    
+    # --- FORM TO ADD NEW TASKS ---
+    with st.expander("➕ Add New Guideline Task"):
+        with st.form("new_calendar_task"):
+            f_freq = st.selectbox("Frequency", ["Monthly", "Quarterly", "Bi-Annual", "Annual"])
+            f_sys = st.selectbox("System", ["Mechanical", "Envelope", "Site", "Life Safety", "Aesthetics"])
+            f_task = st.text_input("Task Name")
+            f_inst = st.text_area("Special Instructions")
+            
+            if st.form_submit_button("Save to Master Calendar"):
+                c = conn.cursor()
+                c.execute("INSERT INTO master_calendar (frequency, system, task, instructions) VALUES (?,?,?,?)",
+                          (f_freq, f_sys, f_task, f_inst))
+                conn.commit()
+                st.success("Guideline Added!")
 
-    # Hardcoded Guidelines (The "North Star")
-    calendar_data = {
-        "Frequency": ["Monthly", "Quarterly", "Bi-Annual", "Annual", "Annual"],
-        "System": ["Mechanical", "Envelope", "Site", "Life Safety", "Aesthetics"],
-        "Task": [
-            "HVAC Filter Audit & Condensate Line Flush",
-            "Building Envelope Scan (Masonry/Sealants)",
-            "Irrigation 'Wet Test' & Zone Calibration",
-            "Generator Full-Load Test & Fluid Check",
-            "Stone/Marble Sealant Integrity Audit"
-        ],
-        "Special Instructions": [
-            "Check all 5 zones; confirm 48-50% RH.",
-            "Inspect North-facing stucco for hairline cracks.",
-            "Adjust heads for seasonal wind patterns.",
-            "Verify remote monitoring is active.",
-            "Focus on high-use kitchen & master bath surfaces."
-        ]
-    }
-    
-    df_cal = pd.DataFrame(calendar_data)
-    
-    # Filter by Frequency for quick viewing
-    freq_filter = st.multiselect("Filter by Frequency", options=["Monthly", "Quarterly", "Bi-Annual", "Annual"], default=["Monthly", "Quarterly"])
-    filtered_df = df_cal[df_cal["Frequency"].isin(freq_filter)]
-    
-    st.table(filtered_df)
-
+    # --- DISPLAY THE CALENDAR FROM DATABASE ---
     st.markdown("---")
+    cal_df = pd.read_sql("SELECT frequency, system, task, instructions FROM master_calendar", conn)
+    
+    if not cal_df.empty:
+        # Sort so users see logical grouping
+        st.table(cal_df.sort_values(by="Frequency"))
+    else:
+        st.info("Your calendar is currently empty. Use the form above to add your first task.")
     
 with tab3:
     st.header(f"Executive Scorecard: {datetime.now().strftime('%B %Y')}")
