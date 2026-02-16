@@ -215,25 +215,81 @@ with tab2:
     except Exception as e:
         st.error(f"Timeline/Guideline error: {e}")
 
-# --- TAB 3: SCORECARD ---
+# --- TAB 3: OPTIMIZED EXECUTIVE SCORECARD ---
 with tab3:
+    st.header(f"Stewardship Report: {active_property}")
     try:
-        all_d = get_data("punch_list").fillna("")
-        p_data = all_d[all_d["property_name"] == active_property].copy()
+        all_d = get_data("punch_list")
+        # Ensure data is clean
+        p_data = all_d[all_d["property_name"] == active_property].copy().fillna(0)
+        
         if not p_data.empty:
+            # 1. Data Processing
             p_data['cost'] = pd.to_numeric(p_data['cost'], errors='coerce').fillna(0)
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Asset Health", f"{int((len(p_data[p_data['status'] == 'Resolved'])/len(p_data))*100)}%")
-            m2.metric("Total Invested", f"${p_data[p_data['status'] == 'Resolved']['cost'].sum():,.0f}")
-            m3.metric("Liability", f"${p_data[p_data['status'] != 'Resolved']['cost'].sum():,.0f}")
-            m4.metric("Active Items", len(p_data[p_data['status'] != 'Resolved']))
-            st.divider()
-            st.subheader("Investment by Category")
-            st.bar_chart(p_data.groupby('category')['cost'].sum(), color="#2563EB")
+            
+            total_invested = p_data[p_data['status'] == 'Resolved']['cost'].sum()
+            upcoming_liability = p_data[p_data['status'] != 'Resolved']['cost'].sum()
+            resolved_count = len(p_data[p_data['status'] == 'Resolved'])
+            total_tasks = len(p_data)
+            health_score = int((resolved_count / total_tasks) * 100) if total_tasks > 0 else 0
+            
+            # 2. Key Performance Indicators (High Contrast)
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Asset Health", f"{health_score}%")
+            k2.metric("Total Invested", f"${total_invested:,.0f}")
+            k3.metric("Upcoming Liability", f"${upcoming_liability:,.0f}")
+            k4.metric("Active Items", total_tasks - resolved_count)
+
+            st.markdown("---")
+            
+            # 3. Financial & Operational Analysis
+            col_chart, col_stat = st.columns([2, 1])
+            
+            with col_chart:
+                st.subheader("Investment by System")
+                # Grouping by category
+                cat_spend = p_data.groupby('category')['cost'].sum().sort_values(ascending=True)
+                if not cat_spend.empty:
+                    st.bar_chart(cat_spend, horizontal=True, color="#1D4ED8")
+                
+                with st.expander("🔍 View Detailed Cost Audit"):
+                    st.dataframe(
+                        p_data[p_data['cost'] > 0][['item', 'category', 'cost']].sort_values(by='cost', ascending=False),
+                        use_container_width=True, hide_index=True
+                    )
+
+            with col_stat:
+                st.subheader("System Health Grid")
+                # Shows a count of tasks by status for each category
+                if not p_data.empty:
+                    grid = pd.crosstab(p_data['category'], p_data['status'])
+                    st.dataframe(grid, use_container_width=True)
+
+            st.markdown("---")
+
+            # 4. Critical Attention Burn-Down List
+            st.subheader("⚠️ Priority Focus Items")
+            # Pulling High-Impact tasks that are NOT Resolved
+            critical_items = p_data[(p_data['impact'] == 'High') & (p_data['status'] != 'Resolved')]
+            
+            if not critical_items.empty:
+                st.dataframe(
+                    critical_items[['item', 'category', 'due_date', 'cost']],
+                    column_config={
+                        "item": "Task Name",
+                        "due_date": st.column_config.DateColumn("Target Date"),
+                        "cost": st.column_config.NumberColumn("Est. Cost", format="$%d")
+                    },
+                    hide_index=True, use_container_width=True
+                )
+            else:
+                st.success("All high-impact systems are currently stable.")
+
         else:
-            st.info("No data recorded.")
-    except:
-        st.error("Scorecard error.")
+            st.info(f"No management data found for {active_property}.")
+            
+    except Exception as e:
+        st.error(f"Scorecard Display Error: {e}")
 
 # --- TAB 4: VENDORS ---
 with tab4:
