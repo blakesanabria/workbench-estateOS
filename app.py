@@ -137,21 +137,89 @@ with tab1:
         prop_hist = raw_hist[raw_hist["property_name"] == active_property].tail(10)
         st.dataframe(prop_hist[["date", "item", "status", "cost"]], use_container_width=True, hide_index=True)
 
-# --- TAB 2: TIMELINE ---
+# --- TAB 2: TIMELINE & GUIDELINES ---
 with tab2:
     try:
+        # 1. Pull data and handle NaNs
         all_p = get_data("punch_list").fillna("")
-        prop_p = all_p[all_p["property_name"] == active_property]
+        all_r = get_data("master_calendar").fillna("")
+        
+        # 2. Filter for Active Property safely
+        prop_p = all_p[all_p["property_name"] == active_property] if "property_name" in all_p.columns else pd.DataFrame()
+        prop_r = all_r[all_r["property_name"] == active_property] if "property_name" in all_r.columns else pd.DataFrame()
         
         events = []
-        for _, row in prop_p.iterrows():
-            if row['due_date']:
-                color = "#ff4b4b" if row['status'] == "Needs Attention" else "#ffa500" if row['status'] == "Pending" else "#28a745"
-                events.append({"title": f"🛠️ {row['item']}", "start": str(row['due_date']), "color": color})
+        
+        # 3. Add Punch List Items (Repairs)
+        if not prop_p.empty:
+            for _, row in prop_p.iterrows():
+                if row['due_date'] and str(row['due_date']).strip() != "":
+                    color = "#ff4b4b" if row['status'] == "Needs Attention" else "#ffa500" if row['status'] == "Pending" else "#28a745"
+                    events.append({
+                        "title": f"🛠️ {row['item']}", 
+                        "start": str(row['due_date']), 
+                        "color": color,
+                        "allDay": True
+                    })
 
-        calendar(events=events, options={"initialView": "dayGridMonth", "height": 650})
+        # 4. Add Recurring Guidelines (Blue Banners)
+        if not prop_r.empty:
+            for _, row in prop_r.iterrows():
+                events.append({
+                    "title": f"📅 {row['frequency']}: {row['task']}", 
+                    "start": datetime.now().strftime("%Y-%m-%d"), 
+                    "color": "#3b82f6", 
+                    "allDay": True
+                })
+
+        # 5. Display the Calendar
+        calendar(events=events, options={
+            "headerToolbar": {"left": "prev,next today", "center": "title", "right": "dayGridMonth,dayGridWeek"},
+            "initialView": "dayGridMonth", 
+            "height": 650
+        })
+        
+        st.divider()
+
+        # 6. MANAGE GUIDELINES SECTION
+        st.subheader(f"Maintenance Standards: {active_property}")
+        
+        col_new, col_list = st.columns([1, 2])
+        
+        with col_new:
+            with st.container(border=True):
+                st.markdown("### ➕ New Standard")
+                with st.form("new_guideline_form", clear_on_submit=True):
+                    f_freq = st.selectbox("Frequency", ["Monthly", "Quarterly", "Bi-Annual", "Annual"])
+                    f_sys = st.selectbox("System", ["Mechanical", "Envelope", "Site", "Life Safety", "Aesthetics"])
+                    f_task = st.text_input("Task Name")
+                    f_inst = st.text_area("Instructions")
+                    
+                    if st.form_submit_button("Save Standard", use_container_width=True):
+                        all_cal = get_data("master_calendar").fillna("")
+                        new_guideline = pd.DataFrame([{
+                            "property_name": active_property,
+                            "frequency": f_freq,
+                            "system": f_sys,
+                            "task": f_task,
+                            "instructions": f_inst
+                        }])
+                        save_data(pd.concat([all_cal, new_guideline], ignore_index=True), "master_calendar")
+                        st.rerun()
+
+        with col_list:
+            st.markdown("### Active Guidelines")
+            if not prop_r.empty:
+                st.dataframe(
+                    prop_r[["frequency", "system", "task", "instructions"]].sort_values(by="frequency"),
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("No recurring guidelines set for this property yet.")
+                
     except Exception as e:
-        st.error(f"Timeline error: {e}")
+        st.error(f"Timeline/Guideline error: {e}")
 
 # --- TAB 3: SCORECARD ---
 with tab3:
