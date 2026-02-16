@@ -46,32 +46,36 @@ tab1, tab2, tab3, tab4 = st.tabs(["Weekly Field Entry", "Master Timeline", "Exec
 with tab1:
     st.header("Field Audit & Scheduling")
     
-    # 1. Fetch Company Names for the dropdown
+    # 1. Fetch Company Names from the Vendor Directory for the dropdown
     try:
         vendor_df = get_data("vendors").fillna("")
-        # We use company_name for the dropdown list
-        vendor_options = ["Internal / Workbench"] + vendor_df["company_name"].unique().tolist()
+        vendor_options = ["Internal / Workbench"] + sorted(vendor_df["company_name"].unique().tolist())
     except:
         vendor_options = ["Internal / Workbench"]
 
-    # 2. Entry Form
+    # 2. Data Entry Form
     with st.form("audit_entry"):
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns([2, 2, 1]) 
+        
         with col1:
-            cat = st.selectbox("System Category", ["Mechanical", "Pool", "Landscaping", "Envelope", "Aesthetics", "Safety"])
-            item = st.text_input("Observation/Task", placeholder="e.g., Repair leak in pool pump")
-            # Dropdown populated by your Vendor Directory
+            cat = st.selectbox("System Category", ["Mechanical", "Pool", "Landscaping", "Envelope", "Aesthetics", "Safety", "Site"])
+            item = st.text_input("Observation/Task", placeholder="e.g., HVAC Annual Service")
             assigned_vendor = st.selectbox("Assign to Vendor", vendor_options)
             
         with col2:
-            stat = st.selectbox("Status", ["Needs Attention", "Pending", "Resolved"])
+            stat = st.selectbox("Current Status", ["Needs Attention", "Pending", "Resolved"])
             due_date = st.date_input("Target Completion Date", value=datetime.now())
-            impact = st.select_slider("Priority/Impact", options=["Low", "Medium", "High"])
+            impact = st.select_slider("Priority Level", options=["Low", "Medium", "High"])
+
+        with col3:
+            # New Cost Input field
+            task_cost = st.number_input("Cost ($)", min_value=0.0, step=50.0, format="%.2f")
+            st.caption("Budget/Actual")
         
         if st.form_submit_button("Log & Schedule Task"):
             df = get_data("punch_list").fillna("")
             
-            # Combine the task name with the vendor for the calendar view
+            # Formatting task name for the calendar view
             task_display = f"{item} ({assigned_vendor})" if assigned_vendor != "Internal / Workbench" else item
             
             new_row = pd.DataFrame([{
@@ -80,20 +84,22 @@ with tab1:
                 "item": task_display,
                 "status": stat,
                 "impact": impact,
-                "due_date": due_date.strftime("%Y-%m-%d")
+                "due_date": due_date.strftime("%Y-%m-%d"),
+                "cost": task_cost
             }])
             
             updated_df = pd.concat([df, new_row], ignore_index=True)
             save_data(updated_df, "punch_list")
-            st.success(f"Task scheduled for {due_date.strftime('%b %d')}!")
+            st.success(f"Task logged for {assigned_vendor} at ${task_cost:,.2f}")
             st.rerun()
 
-    # 3. Recent Activity Table
+    # 3. Recent Activity Log
     st.markdown("### Recent Activity")
     try:
         history = get_data("punch_list").fillna("")
         if not history.empty:
-            st.table(history[["date", "item", "status", "due_date"]].tail(5))
+            # Displaying a clean subset of the data
+            st.table(history[["date", "item", "status", "due_date", "cost"]].tail(5))
         else:
             st.info("No activity logged yet.")
     except Exception as e:
@@ -188,26 +194,30 @@ with tab3:
     st.header(f"Executive Stewardship Report: {datetime.now().strftime('%B %Y')}")
     
     try:
-        all_data = get_data("punch_list")
+        all_data = get_data("punch_list").fillna("")
         
         if not all_data.empty:
-            # 1. LOGIC & CALCULATIONS
+            # 1. DATA PROCESSING
+            # Ensure cost column is numeric for calculation
+            all_data['cost'] = pd.to_numeric(all_data['cost'], errors='coerce').fillna(0)
+            
             total_items = len(all_data)
             urgent_count = len(all_data[all_data['status'] == 'Needs Attention'])
             resolved_count = len(all_data[all_data['status'] == 'Resolved'])
-            completion_rate = (resolved_count / total_items) * 100 if total_items > 0 else 0
+            total_spend = all_data['cost'].sum()
+            health_score = (resolved_count / total_items) * 100 if total_items > 0 else 0
 
-            # 2. EXECUTIVE SUMMARY BOX
+            # 2. EXECUTIVE SUMMARY
             if urgent_count > 0:
-                st.info(f"**Current Status:** Stewardship activities are ongoing. We are currently managing **{urgent_count}** open action items. Systems not listed below are performing within normal parameters.")
+                st.info(f"**Status Update:** We are currently managing **{urgent_count}** urgent items. Total maintenance investment for this period is **${total_spend:,.2f}**.")
             else:
-                st.success("**Current Status:** All property systems are currently stable. Maintenance is up to date with 100% completion rate for this period.")
+                st.success(f"**Status Update:** Property systems are stable. Total maintenance investment: **${total_spend:,.2f}**.")
 
-            # 3. TOP LEVEL METRICS
+            # 3. HIGH-LEVEL METRICS
             m1, m2, m3 = st.columns(3)
             m1.metric("Total Observations", total_items)
-            m2.metric("Items Resolved", resolved_count)
-            m3.metric("Asset Health Score", f"{int(completion_rate)}%")
+            m2.metric("Total Investment", f"${total_spend:,.2f}")
+            m3.metric("Asset Health Score", f"{int(health_score)}%")
 
             st.divider()
 
@@ -216,57 +226,43 @@ with tab3:
             
             with col_a:
                 st.markdown("### 🟢 RESOLVED")
-                resolved = all_data[all_data['status'] == 'Resolved']
-                if not resolved.empty:
-                    for _, row in resolved.tail(5).iterrows():
-                        st.write(f"✅ **{row['category']}:** {row['item']}")
-                        st.caption(f"Completed: {row['date']}")
-                else:
-                    st.write("No items resolved this period.")
+                resolved_df = all_data[all_data['status'] == 'Resolved']
+                for _, row in resolved_df.tail(5).iterrows():
+                    st.write(f"✅ **{row['category']}:** {row['item']}")
+                    st.caption(f"Completed: {row['date']} | Cost: ${row['cost']:,.2f}")
                     
             with col_b:
                 st.markdown("### 🟡 MONITORING")
-                pending = all_data[all_data['status'] == 'Pending']
-                if not pending.empty:
-                    for _, row in pending.tail(5).iterrows():
-                        st.write(f"⏳ **{row['category']}:** {row['item']}")
-                        st.caption(f"Target: {row['due_date']}")
-                else:
-                    st.write("All systems clear.")
+                pending_df = all_data[all_data['status'] == 'Pending']
+                for _, row in pending_df.tail(5).iterrows():
+                    st.write(f"⏳ **{row['category']}:** {row['item']}")
+                    st.caption(f"Target: {row['due_date']} | Est. Cost: ${row['cost']:,.2f}")
                     
             with col_c:
                 st.markdown("### 🔴 ACTION REQUIRED")
-                critical = all_data[all_data['status'] == 'Needs Attention']
-                if not critical.empty:
-                    for _, row in critical.iterrows():
-                        # --- OVERDUE CALCULATION ---
-                        try:
-                            target = pd.to_datetime(row['due_date']).date()
-                            today = datetime.now().date()
-                            days_diff = (today - target).days
-                            
-                            if days_diff > 0:
-                                # Highlight overdue in Red text for the dashboard
-                                overdue_label = f":red[**{days_diff} DAYS OVERDUE**]"
-                            else:
-                                overdue_label = f"Target: {target.strftime('%b %d')}"
-                        except:
-                            overdue_label = "Target: TBD"
+                critical_df = all_data[all_data['status'] == 'Needs Attention']
+                for _, row in critical_df.iterrows():
+                    # Calculate overdue status
+                    try:
+                        target = pd.to_datetime(row['due_date']).date()
+                        days_diff = (datetime.now().date() - target).days
+                        overdue_msg = f":red[**{days_diff} DAYS OVERDUE**]" if days_diff > 0 else f"Target: {target.strftime('%b %d')}"
+                    except:
+                        overdue_msg = "Target: TBD"
+                        
+                    prefix = "🚨" if row['impact'] == "High" else "⚠️"
+                    st.write(f"{prefix} **{row['category']}:** {row['item']}")
+                    st.caption(f"{overdue_msg} | Est: ${row['cost']:,.2f}")
+                    st.divider()
 
-                        prefix = "🚨" if row['impact'] == "High" else "⚠️"
-                        st.write(f"{prefix} **{row['category']}:** {row['item']}")
-                        st.caption(overdue_label)
-                        st.divider()
-                else:
-                    st.write("No urgent actions needed.")
-
-            # 5. VISUAL DISTRIBUTION
-            st.subheader("System Workload Breakdown")
-            category_counts = all_data['category'].value_counts()
-            st.bar_chart(category_counts)
+            # 5. FINANCIAL BREAKDOWN CHART
+            st.divider()
+            st.subheader("Investment by Property System")
+            cost_chart_data = all_data.groupby('category')['cost'].sum()
+            st.bar_chart(cost_chart_data)
 
         else:
-            st.info("Log your first field entry in Tab 1 to generate the scorecard.")
+            st.info("Log your first field entry to generate the scorecard.")
             
     except Exception as e:
         st.error(f"Scorecard Error: {e}")
