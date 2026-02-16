@@ -119,8 +119,8 @@ with st.sidebar:
                 st.rerun()
 
 # --- 5. MAIN DASHBOARD ---
-st.title(f"Property Intelligence: {active_property}")
-tab1, tab2, tab3, tab4 = st.tabs(["⚡ Field Entry", "📅 Timeline", "📊 Scorecard", "👥 Vendors"])
+st.title(f"Property Overview: {active_property}")
+tab1, tab2, tab3, tab4 = st.tabs(["Field Entry", "Calendar", "Scorecard", "Vendors"])
 
 # --- TAB 1: ENTRY & CHECKLIST ---
 with tab1:
@@ -217,7 +217,7 @@ with tab2:
 
 # --- TAB 3: OPTIMIZED EXECUTIVE SCORECARD ---
 with tab3:
-    st.header(f"Stewardship Report: {active_property}")
+    st.header(f"Monthly Report: {active_property}")
     try:
         all_d = get_data("punch_list")
         # Ensure data is clean
@@ -236,7 +236,7 @@ with tab3:
             # 2. Key Performance Indicators (High Contrast)
             k1, k2, k3, k4 = st.columns(4)
             k1.metric("Asset Health", f"{health_score}%")
-            k2.metric("Total Invested", f"${total_invested:,.0f}")
+            k2.metric("Total Cost", f"${total_invested:,.0f}")
             k3.metric("Upcoming Liability", f"${upcoming_liability:,.0f}")
             k4.metric("Active Items", total_tasks - resolved_count)
 
@@ -246,7 +246,7 @@ with tab3:
             col_chart, col_stat = st.columns([2, 1])
             
             with col_chart:
-                st.subheader("Investment by System")
+                st.subheader("Cost by System")
                 # Grouping by category
                 cat_spend = p_data.groupby('category')['cost'].sum().sort_values(ascending=True)
                 if not cat_spend.empty:
