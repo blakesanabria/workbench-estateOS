@@ -276,7 +276,62 @@ with tab3:
 
 # --- TAB 4: VENDOR DIRECTORY ---
 with tab4:
-    st.subheader("Vendor Directory")
-    v_data = get_data("vendors").fillna("")
+    st.subheader("Global Vendor Directory")
+    
+    # 1. Pull current vendor list
+    try:
+        v_data = get_data("vendors").fillna("")
+    except:
+        v_data = pd.DataFrame(columns=["company_name", "service", "name", "phone", "email"])
+
+    # 2. Add New Vendor Form
+    with st.expander("➕ Register New Vendor / Contractor"):
+        with st.form("new_vendor_form", clear_on_submit=True):
+            v_col1, v_col2 = st.columns(2)
+            with v_col1:
+                v_company = st.text_input("Company Name")
+                v_service = st.selectbox("Service Category", ["Plumbing", "Electrical", "HVAC", "Pool", "Landscaping", "General", "AV/Automation"])
+                v_contact = st.text_input("Primary Contact Name")
+            with v_col2:
+                v_phone = st.text_input("Phone Number")
+                v_email = st.text_input("Email Address")
+            
+            if st.form_submit_button("Add Vendor to Workbench Database", use_container_width=True):
+                if v_company:
+                    new_v_row = pd.DataFrame([{
+                        "company_name": v_company,
+                        "service": v_service,
+                        "name": v_contact,
+                        "phone": v_phone,
+                        "email": v_email
+                    }])
+                    updated_v_df = pd.concat([v_data, new_v_row], ignore_index=True)
+                    save_data(updated_v_df, "vendors")
+                    st.success(f"{v_company} added successfully!")
+                    st.rerun()
+                else:
+                    st.error("Company Name is required.")
+
+    st.markdown("---")
+
+    # 3. Interactive Directory Table
     if not v_data.empty:
-        st.dataframe(v_data[["company_name", "service", "name", "phone", "email"]], use_container_width=True, hide_index=True)
+        # We use st.data_editor here so you can also edit existing vendor info on the fly
+        st.write("### Active Vendors")
+        st.info("Tip: You can edit vendor details directly in the table below.")
+        
+        edited_vendors = st.data_editor(
+            v_data[["company_name", "service", "name", "phone", "email"]],
+            use_container_width=True,
+            hide_index=True,
+            num_rows="dynamic", # Allows you to delete vendors by selecting the row and hitting 'Delete'
+            key="vendor_editor"
+        )
+        
+        # Save changes if the table is edited
+        if st.button("Save Directory Changes"):
+            save_data(edited_vendors, "vendors")
+            st.success("Vendor directory updated.")
+            st.rerun()
+    else:
+        st.info("No vendors found. Use the form above to add your first contractor.")
