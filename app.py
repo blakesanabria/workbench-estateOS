@@ -41,49 +41,63 @@ def save_data(df, worksheet):
 st.set_page_config(page_title="Workbench Group | Estate OS", layout="wide")
 st.title("Maintenance Portal: 3739 Knollwood Dr")
 
-tab1, tab2, tab3 = st.tabs(["Weekly Field Entry", "Master Maintenance Calendar", "Executive Scorecard"])
+tab1, tab2, tab3, tab4 = st.tabs(["Weekly Field Entry", "Master Timeline", "Executive Scorecard", "Vendor Directory"])
 
 with tab1:
-    st.header("Field Audit & Punch List")
+    st.header("Field Audit & Scheduling")
     
+    # 1. Fetch Company Names for the dropdown
+    try:
+        vendor_df = get_data("vendors").fillna("")
+        # We use company_name for the dropdown list
+        vendor_options = ["Internal / Workbench"] + vendor_df["company_name"].unique().tolist()
+    except:
+        vendor_options = ["Internal / Workbench"]
+
+    # 2. Entry Form
     with st.form("audit_entry"):
-        col1, col2, col3 = st.columns(3) # Changed to 3 columns
+        col1, col2 = st.columns(2)
         with col1:
-            cat = st.selectbox("System Category", ["Mechanical", "Envelope", "Aesthetics", "Safety"])
-            item = st.text_input("Observation/Task")
+            cat = st.selectbox("System Category", ["Mechanical", "Pool", "Landscaping", "Envelope", "Aesthetics", "Safety"])
+            item = st.text_input("Observation/Task", placeholder="e.g., Repair leak in pool pump")
+            # Dropdown populated by your Vendor Directory
+            assigned_vendor = st.selectbox("Assign to Vendor", vendor_options)
+            
         with col2:
-            stat = st.selectbox("Current Status", ["Resolved", "Pending", "Needs Attention"])
-            impact = st.select_slider("Impact on Asset Health", options=["Low", "Medium", "High"])
-        with col3:
-            # NEW: Date picker for the due date
+            stat = st.selectbox("Status", ["Needs Attention", "Pending", "Resolved"])
             due_date = st.date_input("Target Completion Date", value=datetime.now())
+            impact = st.select_slider("Priority/Impact", options=["Low", "Medium", "High"])
         
-        if st.form_submit_button("Log Weekly Finding"):
-            df = get_data("punch_list")
-            # Added due_date to the new row dictionary
+        if st.form_submit_button("Log & Schedule Task"):
+            df = get_data("punch_list").fillna("")
+            
+            # Combine the task name with the vendor for the calendar view
+            task_display = f"{item} ({assigned_vendor})" if assigned_vendor != "Internal / Workbench" else item
+            
             new_row = pd.DataFrame([{
-                "date": datetime.now().strftime("%Y-%m-%d"), 
-                "category": cat, 
-                "item": item, 
-                "status": stat, 
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "category": cat,
+                "item": task_display,
+                "status": stat,
                 "impact": impact,
                 "due_date": due_date.strftime("%Y-%m-%d")
             }])
+            
             updated_df = pd.concat([df, new_row], ignore_index=True)
             save_data(updated_df, "punch_list")
-            st.success(f"Finding logged! Target: {due_date.strftime('%b %d')}")
+            st.success(f"Task scheduled for {due_date.strftime('%b %d')}!")
             st.rerun()
+
+    # 3. Recent Activity Table
     st.markdown("### Recent Activity")
     try:
-        history = get_data("punch_list")
+        history = get_data("punch_list").fillna("")
         if not history.empty:
-            # We only show the columns we want to see
-            display_cols = ["date", "category", "item", "status", "due_date"]
-            st.table(history[display_cols].tail(5))
+            st.table(history[["date", "item", "status", "due_date"]].tail(5))
         else:
             st.info("No activity logged yet.")
     except Exception as e:
-        st.error(f"Waiting for Google Sheets connection... {e}")
+        st.error(f"Error loading activity: {e}")
     
 with tab2:
     st.header("Estate Maintenance Timeline")
@@ -256,3 +270,44 @@ with tab3:
             
     except Exception as e:
         st.error(f"Scorecard Error: {e}")
+
+# --- TAB 4: VENDOR DIRECTORY ---
+with tab4:
+    st.header("Service Provider Directory")
+    
+    # 1. Add New Vendor Form
+    with st.expander("➕ Add New Service Provider"):
+        with st.form("new_vendor"):
+            v_company = st.text_input("Company Name")
+            v_contact = st.text_input("Contact Person")
+            v_serv = st.selectbox("Service Category", ["Pool", "HVAC", "Landscaping", "Plumbing", "Electrical", "Roofing", "General"])
+            v_phone = st.text_input("Phone Number")
+            v_email = st.text_input("Email Address")
+            
+            if st.form_submit_button("Add to Directory"):
+                v_df = get_data("vendors").fillna("")
+                
+                new_v = pd.DataFrame([{
+                    "company_name": v_company,
+                    "name": v_contact,
+                    "service": v_serv,
+                    "phone": v_phone,
+                    "email": v_email
+                }])
+                
+                updated_v = pd.concat([v_df, new_v], ignore_index=True)
+                save_data(updated_v, "vendors")
+                st.success(f"Vendor '{v_company}' saved successfully!")
+                st.rerun()
+
+    # 2. Directory Display
+    st.divider()
+    try:
+        vendors = get_data("vendors").fillna("")
+        if not vendors.empty:
+            # Organizing columns for a professional look
+            st.table(vendors[["company_name", "service", "name", "phone", "email"]])
+        else:
+            st.info("Your vendor directory is currently empty.")
+    except Exception as e:
+        st.error("Make sure your 'vendors' worksheet exists in Google Sheets.")
