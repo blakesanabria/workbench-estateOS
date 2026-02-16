@@ -86,8 +86,8 @@ with st.sidebar:
                 st.rerun()
 
 # --- 5. DASHBOARD ---
-st.title(f"Property Intelligence: {active_property}")
-tab1, tab2, tab3, tab4 = st.tabs(["⚡ Field Entry", "📅 Timeline", "📊 Scorecard", "👥 Vendors"])
+st.title(f"Property Overview: {active_property}")
+tab1, tab2, tab3, tab4 = st.tabs(["Field Entry", "Calendar", "Scorecard", "Vendors"])
 
 # --- TAB 1: FIELD ENTRY & CHECKLIST ---
 with tab1:
