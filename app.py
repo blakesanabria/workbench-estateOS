@@ -110,34 +110,48 @@ with tab1:
 with tab2:
     st.header(f"Maintenance Timeline: {active_property}")
     try:
-        # Filter data for active property
+        # 1. Pull data and handle NaNs
         all_p = get_data("punch_list").fillna("")
         all_r = get_data("master_calendar").fillna("")
         
-        prop_punch = all_p[all_p["property_name"] == active_property]
-        prop_rec = all_r[all_r["property_name"] == active_property]
+        # 2. Filter for Active Property safely
+        prop_punch = all_p[all_p["property_name"] == active_property] if "property_name" in all_p.columns else pd.DataFrame()
+        prop_rec = all_r[all_r["property_name"] == active_property] if "property_name" in all_r.columns else pd.DataFrame()
         
         calendar_events = []
+        
+        # 3. Add Punch List Items with date validation
         if not prop_punch.empty:
             for _, row in prop_punch.iterrows():
-                status_color = "#ff4b4b" if row['status'] == "Needs Attention" else "#ffa500" if row['status'] == "Pending" else "#28a745"
-                calendar_events.append({
-                    "title": f"🛠️ {row['item']}", "start": str(row['due_date']), "color": status_color, "allDay": True
-                })
+                # Only add if there is a valid due_date
+                if row['due_date'] and str(row['due_date']).strip() != "":
+                    status_color = "#ff4b4b" if row['status'] == "Needs Attention" else "#ffa500" if row['status'] == "Pending" else "#28a745"
+                    calendar_events.append({
+                        "title": f"🛠️ {row['item']}", 
+                        "start": str(row['due_date']), 
+                        "color": status_color, 
+                        "allDay": True
+                    })
 
+        # 4. Add Recurring Guidelines
         if not prop_rec.empty:
             for _, row in prop_rec.iterrows():
                 calendar_events.append({
-                    "title": f"📅 {row['frequency']}: {row['task']}", "start": datetime.now().strftime("%Y-%m-%d"), "color": "#3b82f6", "allDay": True
+                    "title": f"📅 {row['frequency']}: {row['task']}", 
+                    "start": datetime.now().strftime("%Y-%m-%d"), 
+                    "color": "#3b82f6", 
+                    "allDay": True
                 })
 
         calendar_options = {
             "headerToolbar": {"left": "prev,next today", "center": "title", "right": "dayGridMonth,dayGridWeek"},
-            "initialView": "dayGridMonth", "height": 750,
+            "initialView": "dayGridMonth", 
+            "height": 750,
         }
         calendar(events=calendar_events, options=calendar_options)
-    except:
-        st.error("Error loading Timeline.")
+        
+    except Exception as e:
+        st.error(f"Timeline display error: {e}")
 
     st.divider()
     st.subheader(f"Manage Guidelines for {active_property}")
@@ -158,34 +172,51 @@ with tab3:
     st.header(f"Stewardship Report: {active_property}")
     try:
         all_d = get_data("punch_list").fillna("")
-        prop_data = all_d[all_d["property_name"] == active_property]
+        
+        # Filter for current property
+        if "property_name" in all_d.columns:
+            prop_data = all_d[all_d["property_name"] == active_property].copy()
+        else:
+            prop_data = pd.DataFrame()
         
         if not prop_data.empty:
+            # 1. CLEAN COST DATA (Prevents the calculation error)
             prop_data['cost'] = pd.to_numeric(prop_data['cost'], errors='coerce').fillna(0)
+            
+            total_items = len(prop_data)
             total_spend = prop_data['cost'].sum()
-            health = (len(prop_data[prop_data['status'] == 'Resolved']) / len(prop_data)) * 100
+            resolved_count = len(prop_data[prop_data['status'] == 'Resolved'])
+            health = (resolved_count / total_items) * 100 if total_items > 0 else 0
 
+            # 2. METRICS
             m1, m2, m3 = st.columns(3)
-            m1.metric("Tasks Managed", len(prop_data))
+            m1.metric("Tasks Managed", total_items)
             m2.metric("Property Investment", f"${total_spend:,.2f}")
             m3.metric("Health Score", f"{int(health)}%")
 
             st.divider()
-            # Simplified Status View
+
+            # 3. STATUS BOARD
             c1, c2, c3 = st.columns(3)
             with c1:
-                st.success("Resolved")
-                st.write(prop_data[prop_data['status'] == 'Resolved'][['item', 'cost']].tail(3))
+                st.success("🟢 RESOLVED")
+                st.dataframe(prop_data[prop_data['status'] == 'Resolved'][['item', 'cost']].tail(5), hide_index=True)
             with c2:
-                st.warning("Pending")
-                st.write(prop_data[prop_data['status'] == 'Pending'][['item', 'due_date']].tail(3))
+                st.warning("🟡 PENDING")
+                st.dataframe(prop_data[prop_data['status'] == 'Pending'][['item', 'due_date']].tail(5), hide_index=True)
             with c3:
-                st.error("Needs Attention")
-                st.write(prop_data[prop_data['status'] == 'Needs Attention'][['item', 'impact']])
+                st.error("🔴 ACTION REQUIRED")
+                st.dataframe(prop_data[prop_data['status'] == 'Needs Attention'][['item', 'impact']], hide_index=True)
+                
+            # 4. CHART
+            st.divider()
+            st.subheader("Spending by Category")
+            st.bar_chart(prop_data.groupby('category')['cost'].sum())
         else:
-            st.info("No data for this property.")
-    except:
-        st.error("Error loading scorecard.")
+            st.info(f"No data found for {active_property}. Log an entry in Tab 1 to start.")
+            
+    except Exception as e:
+        st.error(f"Scorecard Error: {e}")
 
 # --- TAB 4: VENDOR DIRECTORY ---
 with tab4:
