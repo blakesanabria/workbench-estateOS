@@ -57,10 +57,27 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 @st.cache_data(ttl=300) 
 def get_data(worksheet):
-    return conn.read(worksheet=worksheet)
+    # 1. Read the raw data
+    df = conn.read(worksheet=worksheet)
+    
+    # 2. Fix the dates so the Calendar and Checklist can "see" them
+    # This converts Google Sheet strings into Python date objects
+    date_cols = ['date', 'due_date']
+    for col in date_cols:
+        if col in df.columns:
+            # errors='coerce' turns bad dates into "NaT" instead of crashing the app
+            df[col] = pd.to_datetime(df[col], errors='coerce').dt.date
+            
+    return df
 
 def save_data(df, worksheet):
-    conn.update(worksheet=worksheet, data=df)
+    # We convert dates back to strings before saving so Google Sheets likes it
+    df_to_save = df.copy()
+    for col in ['date', 'due_date']:
+        if col in df_to_save.columns:
+            df_to_save[col] = df_to_save[col].astype(str)
+            
+    conn.update(worksheet=worksheet, data=df_to_save)
     st.cache_data.clear()
 
 # --- 4. SIDEBAR ---
