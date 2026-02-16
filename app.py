@@ -4,28 +4,20 @@ from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 from streamlit_calendar import calendar
 
-# --- 1. SETUP & THEMING ---
+# --- 1. SETUP & THEME ---
 st.set_page_config(page_title="Workbench Estate OS", layout="wide", initial_sidebar_state="expanded")
 
-# Custom CSS for Modern UI
+# Professional Modern Styling
 st.markdown("""
     <style>
-    /* Main Background and Font */
     .stApp { background-color: #0e1117; font-family: 'Inter', sans-serif; }
-    
-    /* Modern Metric Cards */
     [data-testid="stMetricValue"] { font-size: 28px !important; font-weight: 700 !important; color: #00d4ff !important; }
-    [data-testid="stMetricLabel"] { font-size: 14px !important; color: #9ca3af !important; }
-    
-    /* Styled Containers/Cards */
     div[data-testid="stVerticalBlock"] > div[style*="border"] {
         background-color: #1a1c24;
         border: 1px solid #2d2f39 !important;
         border-radius: 12px !important;
         padding: 20px !important;
     }
-    
-    /* Modern Tabs */
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
     .stTabs [data-baseweb="tab"] {
         background-color: #161b22;
@@ -41,13 +33,12 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. LOGIN SECURITY ---
+# --- 2. SECURITY ---
 def check_password():
     if "password_correct" not in st.session_state:
         st.session_state["password_correct"] = False
     if st.session_state["password_correct"]:
         return True
-
     st.title("Estate OS | Secure Access")
     password = st.text_input("Access Key", type="password")
     if st.button("Unlock Dashboard", use_container_width=True):
@@ -72,12 +63,11 @@ def save_data(df, worksheet):
     conn.update(worksheet=worksheet, data=df)
     st.cache_data.clear()
 
-# --- 4. SIDEBAR CONTROL PANEL ---
+# --- 4. SIDEBAR ---
 with st.sidebar:
     st.title("Workbench Group")
     st.markdown("---")
     
-    # Dynamic Property Pull
     try:
         all_p_data = get_data("punch_list").fillna("")
         existing_props = sorted([p for p in all_p_data["property_name"].unique() if p]) if not all_p_data.empty else ["3739 Knollwood Dr"]
@@ -95,12 +85,11 @@ with st.sidebar:
                 save_data(pd.concat([get_data("punch_list").fillna(""), seed], ignore_index=True), "punch_list")
                 st.rerun()
 
-# --- 5. DASHBOARD LAYOUT ---
-st.title(f"Property Overview: {active_property}")
+# --- 5. DASHBOARD ---
+st.title(f"Property Intelligence: {active_property}")
+tab1, tab2, tab3, tab4 = st.tabs(["⚡ Field Entry", "📅 Timeline", "📊 Scorecard", "👥 Vendors"])
 
-tab1, tab2, tab3, tab4 = st.tabs(["Field Entry", "Calendar", "Scorecard", "Vendors"])
-
-# --- TAB 1: FIELD ENTRY ---
+# --- TAB 1: FIELD ENTRY & CHECKLIST ---
 with tab1:
     col_form, col_recent = st.columns([1, 1])
     
@@ -117,12 +106,10 @@ with tab1:
                 cat = st.selectbox("Category", ["Mechanical", "Pool", "Landscaping", "Envelope", "Aesthetics", "Safety", "Site"])
                 item = st.text_input("Task Description")
                 vendor = st.selectbox("Assign Vendor", v_options)
-                
                 c1, c2, c3 = st.columns(3)
                 stat = c1.selectbox("Status", ["Needs Attention", "Pending", "Resolved"])
                 due = c2.date_input("Due Date")
                 cost = c3.number_input("Est. Cost", min_value=0.0)
-                
                 impact = st.select_slider("Priority", options=["Low", "Medium", "High"])
                 
                 if st.form_submit_button("Log Entry", use_container_width=True):
@@ -137,87 +124,63 @@ with tab1:
         prop_hist = raw_hist[raw_hist["property_name"] == active_property].tail(10)
         st.dataframe(prop_hist[["date", "item", "status", "cost"]], use_container_width=True, hide_index=True)
 
+    st.divider()
+    st.subheader(f"✅ Active Checklist")
+    full_punch = get_data("punch_list").fillna("")
+    if not full_punch.empty:
+        checklist_df = full_punch[(full_punch["property_name"] == active_property) & (full_punch["status"] != "Resolved")].copy()
+        if not checklist_df.empty:
+            checklist_df.insert(0, "Done", False)
+            edited_df = st.data_editor(
+                checklist_df[["Done", "date", "item", "impact", "due_date"]],
+                column_config={"Done": st.column_config.CheckboxColumn("Complete", default=False)},
+                disabled=["date", "item", "impact", "due_date"],
+                hide_index=True, use_container_width=True, key="task_checklist"
+            )
+            if edited_df["Done"].any():
+                completed_items = edited_df[edited_df["Done"] == True]["item"].tolist()
+                for item_name in completed_items:
+                    full_punch.loc[(full_punch["property_name"] == active_property) & (full_punch["item"] == item_name), "status"] = "Resolved"
+                save_data(full_punch, "punch_list")
+                st.rerun()
+        else:
+            st.success("All caught up! No pending tasks.")
+
 # --- TAB 2: TIMELINE & GUIDELINES ---
 with tab2:
     try:
-        # 1. Pull data and handle NaNs
         all_p = get_data("punch_list").fillna("")
         all_r = get_data("master_calendar").fillna("")
-        
-        # 2. Filter for Active Property safely
-        prop_p = all_p[all_p["property_name"] == active_property] if "property_name" in all_p.columns else pd.DataFrame()
-        prop_r = all_r[all_r["property_name"] == active_property] if "property_name" in all_r.columns else pd.DataFrame()
+        prop_p = all_p[all_p["property_name"] == active_property]
+        prop_r = all_r[all_r["property_name"] == active_property]
         
         events = []
-        
-        # 3. Add Punch List Items (Repairs)
-        if not prop_p.empty:
-            for _, row in prop_p.iterrows():
-                if row['due_date'] and str(row['due_date']).strip() != "":
-                    color = "#ff4b4b" if row['status'] == "Needs Attention" else "#ffa500" if row['status'] == "Pending" else "#28a745"
-                    events.append({
-                        "title": f"🛠️ {row['item']}", 
-                        "start": str(row['due_date']), 
-                        "color": color,
-                        "allDay": True
-                    })
+        for _, row in prop_p.iterrows():
+            if row['due_date']:
+                color = "#ff4b4b" if row['status'] == "Needs Attention" else "#ffa500" if row['status'] == "Pending" else "#28a745"
+                events.append({"title": f"🛠️ {row['item']}", "start": str(row['due_date']), "color": color, "allDay": True})
+        for _, row in prop_r.iterrows():
+            events.append({"title": f"📅 {row['frequency']}: {row['task']}", "start": datetime.now().strftime("%Y-%m-%d"), "color": "#3b82f6", "allDay": True})
 
-        # 4. Add Recurring Guidelines (Blue Banners)
-        if not prop_r.empty:
-            for _, row in prop_r.iterrows():
-                events.append({
-                    "title": f"📅 {row['frequency']}: {row['task']}", 
-                    "start": datetime.now().strftime("%Y-%m-%d"), 
-                    "color": "#3b82f6", 
-                    "allDay": True
-                })
-
-        # 5. Display the Calendar
-        calendar(events=events, options={
-            "headerToolbar": {"left": "prev,next today", "center": "title", "right": "dayGridMonth,dayGridWeek"},
-            "initialView": "dayGridMonth", 
-            "height": 650
-        })
+        calendar(events=events, options={"initialView": "dayGridMonth", "height": 650})
         
         st.divider()
-
-        # 6. MANAGE GUIDELINES SECTION
-        st.subheader(f"Maintenance Standards: {active_property}")
-        
-        col_new, col_list = st.columns([1, 2])
-        
-        with col_new:
+        st.subheader("Maintenance Standards")
+        c_new, c_list = st.columns([1, 2])
+        with c_new:
             with st.container(border=True):
-                st.markdown("### ➕ New Standard")
-                with st.form("new_guideline_form", clear_on_submit=True):
+                with st.form("guideline_form", clear_on_submit=True):
                     f_freq = st.selectbox("Frequency", ["Monthly", "Quarterly", "Bi-Annual", "Annual"])
                     f_sys = st.selectbox("System", ["Mechanical", "Envelope", "Site", "Life Safety", "Aesthetics"])
                     f_task = st.text_input("Task Name")
                     f_inst = st.text_area("Instructions")
-                    
                     if st.form_submit_button("Save Standard", use_container_width=True):
                         all_cal = get_data("master_calendar").fillna("")
-                        new_guideline = pd.DataFrame([{
-                            "property_name": active_property,
-                            "frequency": f_freq,
-                            "system": f_sys,
-                            "task": f_task,
-                            "instructions": f_inst
-                        }])
-                        save_data(pd.concat([all_cal, new_guideline], ignore_index=True), "master_calendar")
+                        new_g = pd.DataFrame([{"property_name": active_property, "frequency": f_freq, "system": f_sys, "task": f_task, "instructions": f_inst}])
+                        save_data(pd.concat([all_cal, new_g], ignore_index=True), "master_calendar")
                         st.rerun()
-
-        with col_list:
-            st.markdown("### Active Guidelines")
-            if not prop_r.empty:
-                st.dataframe(
-                    prop_r[["frequency", "system", "task", "instructions"]].sort_values(by="frequency"),
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.info("No recurring guidelines set for this property yet.")
-                
+        with c_list:
+            st.dataframe(prop_r[["frequency", "system", "task", "instructions"]].sort_values(by="frequency"), use_container_width=True, hide_index=True)
     except Exception as e:
         st.error(f"Timeline/Guideline error: {e}")
 
@@ -226,17 +189,13 @@ with tab3:
     try:
         all_d = get_data("punch_list").fillna("")
         p_data = all_d[all_d["property_name"] == active_property].copy()
-        
         if not p_data.empty:
             p_data['cost'] = pd.to_numeric(p_data['cost'], errors='coerce').fillna(0)
-            
             m1, m2, m3 = st.columns(3)
             m1.metric("Active Tasks", len(p_data[p_data['status'] != 'Resolved']))
-            m2.metric("Total Investment", f"${p_data['cost'].sum():,.2f}")
+            m2.metric("Investment", f"${p_data['cost'].sum():,.2f}")
             m3.metric("Asset Health", f"{int((len(p_data[p_data['status'] == 'Resolved'])/len(p_data))*100)}%")
-            
             st.divider()
-            st.subheader("Investment by System")
             st.bar_chart(p_data.groupby('category')['cost'].sum())
         else:
             st.info("No data recorded.")
@@ -245,7 +204,7 @@ with tab3:
 
 # --- TAB 4: VENDOR DIRECTORY ---
 with tab4:
-    st.subheader("Global Vendor Access")
+    st.subheader("Vendor Directory")
     v_data = get_data("vendors").fillna("")
     if not v_data.empty:
         st.dataframe(v_data[["company_name", "service", "name", "phone", "email"]], use_container_width=True, hide_index=True)
