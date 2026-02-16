@@ -4,32 +4,58 @@ from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 from streamlit_calendar import calendar
 
-# --- 1. SETUP & THEME ---
+# --- 1. SETUP & BRIGHT THEME ---
 st.set_page_config(page_title="Workbench Estate OS", layout="wide", initial_sidebar_state="expanded")
 
-# Professional Modern Styling
+# High-Contrast Light Mode Styling
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; font-family: 'Inter', sans-serif; }
-    [data-testid="stMetricValue"] { font-size: 28px !important; font-weight: 700 !important; color: #00d4ff !important; }
+    /* Main Background and Clean Font */
+    .stApp { 
+        background-color: #FFFFFF; 
+        color: #1F2937;
+        font-family: 'Inter', sans-serif; 
+    }
+    
+    /* Modern Metric Cards - High Contrast */
+    [data-testid="stMetricValue"] { 
+        font-size: 32px !important; 
+        font-weight: 800 !important; 
+        color: #1D4ED8 !important; /* Professional Blue */
+    }
+    [data-testid="stMetricLabel"] { 
+        font-size: 16px !important; 
+        color: #4B5563 !important; 
+        font-weight: 600 !important;
+    }
+    
+    /* Styled Containers (Cards) with subtle shadow */
     div[data-testid="stVerticalBlock"] > div[style*="border"] {
-        background-color: #1a1c24;
-        border: 1px solid #2d2f39 !important;
+        background-color: #F9FAFB !important;
+        border: 1px solid #E5E7EB !important;
         border-radius: 12px !important;
         padding: 20px !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
     }
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+    
+    /* Clean Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #F3F4F6 !important;
+        border-right: 1px solid #E5E7EB;
+    }
+
+    /* Tab Styling - Easy to Read */
     .stTabs [data-baseweb="tab"] {
-        background-color: #161b22;
-        border-radius: 8px 8px 0 0;
-        padding: 10px 20px;
-        color: #8b949e;
+        font-weight: 600;
+        color: #6B7280;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #21262d !important;
-        color: #58a6ff !important;
-        border-bottom: 2px solid #58a6ff !important;
+        color: #1D4ED8 !important;
+        border-bottom: 2px solid #1D4ED8 !important;
     }
+    
+    /* Headings */
+    h1, h2, h3 { color: #111827 !important; font-weight: 800 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -52,39 +78,30 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- 3. DATA ENGINE ---
+# --- 3. DATA ENGINE (Date-Fixed) ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 @st.cache_data(ttl=300) 
 def get_data(worksheet):
-    # 1. Read the raw data
     df = conn.read(worksheet=worksheet)
-    
-    # 2. Fix the dates so the Calendar and Checklist can "see" them
-    # This converts Google Sheet strings into Python date objects
-    date_cols = ['date', 'due_date']
-    for col in date_cols:
+    # Fix dates immediately upon loading
+    for col in ['date', 'due_date']:
         if col in df.columns:
-            # errors='coerce' turns bad dates into "NaT" instead of crashing the app
             df[col] = pd.to_datetime(df[col], errors='coerce').dt.date
-            
     return df
 
 def save_data(df, worksheet):
-    # We convert dates back to strings before saving so Google Sheets likes it
-    df_to_save = df.copy()
+    df_save = df.copy()
     for col in ['date', 'due_date']:
-        if col in df_to_save.columns:
-            df_to_save[col] = df_to_save[col].astype(str)
-            
-    conn.update(worksheet=worksheet, data=df_to_save)
+        if col in df_save.columns:
+            df_save[col] = df_save[col].astype(str)
+    conn.update(worksheet=worksheet, data=df_save)
     st.cache_data.clear()
 
 # --- 4. SIDEBAR ---
 with st.sidebar:
     st.title("Workbench Group")
     st.markdown("---")
-    
     try:
         all_p_data = get_data("punch_list").fillna("")
         existing_props = sorted([p for p in all_p_data["property_name"].unique() if p]) if not all_p_data.empty else ["3739 Knollwood Dr"]
@@ -92,7 +109,6 @@ with st.sidebar:
         existing_props = ["3739 Knollwood Dr"]
 
     active_property = st.selectbox("Active Estate", existing_props, index=0)
-    
     st.markdown("---")
     with st.expander("Add New Property"):
         new_prop_name = st.text_input("Address")
@@ -102,14 +118,13 @@ with st.sidebar:
                 save_data(pd.concat([get_data("punch_list").fillna(""), seed], ignore_index=True), "punch_list")
                 st.rerun()
 
-# --- 5. DASHBOARD ---
-st.title(f"Property Overview: {active_property}")
-tab1, tab2, tab3, tab4 = st.tabs(["Field Entry", "Calendar", "Scorecard", "Vendors"])
+# --- 5. MAIN DASHBOARD ---
+st.title(f"Property Intelligence: {active_property}")
+tab1, tab2, tab3, tab4 = st.tabs(["⚡ Field Entry", "📅 Timeline", "📊 Scorecard", "👥 Vendors"])
 
-# --- TAB 1: FIELD ENTRY & CHECKLIST ---
+# --- TAB 1: ENTRY & CHECKLIST ---
 with tab1:
     col_form, col_recent = st.columns([1, 1])
-    
     with col_form:
         with st.container(border=True):
             st.subheader("New Observation")
@@ -126,9 +141,8 @@ with tab1:
                 c1, c2, c3 = st.columns(3)
                 stat = c1.selectbox("Status", ["Needs Attention", "Pending", "Resolved"])
                 due = c2.date_input("Due Date")
-                cost = c3.number_input("Est. Cost", min_value=0.0)
+                cost = c3.number_input("Est. Cost ($)", min_value=0.0)
                 impact = st.select_slider("Priority", options=["Low", "Medium", "High"])
-                
                 if st.form_submit_button("Log Entry", use_container_width=True):
                     full_df = get_data("punch_list").fillna("")
                     new_row = pd.DataFrame([{"property_name": active_property, "date": datetime.now().strftime("%Y-%m-%d"), "category": cat, "item": f"{item} ({vendor})", "status": stat, "impact": impact, "due_date": due.strftime("%Y-%m-%d"), "cost": cost}])
@@ -174,10 +188,10 @@ with tab2:
         events = []
         for _, row in prop_p.iterrows():
             if row['due_date']:
-                color = "#ff4b4b" if row['status'] == "Needs Attention" else "#ffa500" if row['status'] == "Pending" else "#28a745"
+                color = "#DC2626" if row['status'] == "Needs Attention" else "#D97706" if row['status'] == "Pending" else "#059669"
                 events.append({"title": f"🛠️ {row['item']}", "start": str(row['due_date']), "color": color, "allDay": True})
         for _, row in prop_r.iterrows():
-            events.append({"title": f"📅 {row['frequency']}: {row['task']}", "start": datetime.now().strftime("%Y-%m-%d"), "color": "#3b82f6", "allDay": True})
+            events.append({"title": f"📅 {row['frequency']}: {row['task']}", "start": datetime.now().strftime("%Y-%m-%d"), "color": "#2563EB", "allDay": True})
 
         calendar(events=events, options={"initialView": "dayGridMonth", "height": 650})
         
@@ -200,138 +214,43 @@ with tab2:
             st.dataframe(prop_r[["frequency", "system", "task", "instructions"]].sort_values(by="frequency"), use_container_width=True, hide_index=True)
     except Exception as e:
         st.error(f"Timeline/Guideline error: {e}")
-        
-# --- TAB 3: EXECUTIVE SCORECARD ---
+
+# --- TAB 3: SCORECARD ---
 with tab3:
-    st.header(f"Monthly Report: {active_property}")
     try:
         all_d = get_data("punch_list").fillna("")
         p_data = all_d[all_d["property_name"] == active_property].copy()
-        
         if not p_data.empty:
-            # 1. Data Cleaning & Calculations
             p_data['cost'] = pd.to_numeric(p_data['cost'], errors='coerce').fillna(0)
-            
-            total_invested = p_data[p_data['status'] == 'Resolved']['cost'].sum()
-            upcoming_liability = p_data[p_data['status'] != 'Resolved']['cost'].sum()
-            resolved_count = len(p_data[p_data['status'] == 'Resolved'])
-            total_tasks = len(p_data)
-            health_score = int((resolved_count / total_tasks) * 100) if total_tasks > 0 else 0
-            
-            # 2. Key Performance Indicators (KPIs)
-            k1, k2, k3, k4 = st.columns(4)
-            k1.metric("Asset Health", f"{health_score}%")
-            k2.metric("Total Spent", f"${total_invested:,.0f}")
-            k3.metric("Upcoming Liability", f"${upcoming_liability:,.0f}")
-            k4.metric("Active Items", total_tasks - resolved_count)
-
-            st.markdown("---")
-            
-            # 3. Financial & Operational Analysis
-            col_chart, col_stat = st.columns([2, 1])
-            
-            with col_chart:
-                st.subheader("Cost by System")
-                # Horizontal bars are easier to read for category names
-                cat_spend = p_data.groupby('category')['cost'].sum().sort_values(ascending=True)
-                st.bar_chart(cat_spend, horizontal=True, color="#00d4ff")
-                
-                with st.expander("🔍 View Detailed Cost Audit"):
-                    st.dataframe(
-                        p_data[p_data['cost'] > 0][['item', 'category', 'cost']].sort_values(by='cost', ascending=False),
-                        use_container_width=True, hide_index=True
-                    )
-
-            with col_stat:
-                st.subheader("System Health Grid")
-                # This shows a count of tasks by status for each category
-                if not p_data.empty:
-                    grid = pd.crosstab(p_data['category'], p_data['status'])
-                    st.dataframe(grid, use_container_width=True)
-
-            st.markdown("---")
-
-            # 4. Critical Attention Burn-Down List
-            st.subheader("⚠️ Priority Focus Items")
-            critical_items = p_data[(p_data['impact'] == 'High') & (p_data['status'] != 'Resolved')]
-            
-            if not critical_items.empty:
-                st.dataframe(
-                    critical_items[['item', 'category', 'due_date', 'cost']],
-                    column_config={
-                        "item": "Task Name",
-                        "due_date": st.column_config.DateColumn("Target Date"),
-                        "cost": st.column_config.NumberColumn("Est. Cost", format="$%d")
-                    },
-                    hide_index=True, use_container_width=True
-                )
-            else:
-                st.success("All high-impact systems are currently stable.")
-
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Asset Health", f"{int((len(p_data[p_data['status'] == 'Resolved'])/len(p_data))*100)}%")
+            m2.metric("Total Invested", f"${p_data[p_data['status'] == 'Resolved']['cost'].sum():,.0f}")
+            m3.metric("Liability", f"${p_data[p_data['status'] != 'Resolved']['cost'].sum():,.0f}")
+            m4.metric("Active Items", len(p_data[p_data['status'] != 'Resolved']))
+            st.divider()
+            st.subheader("Investment by Category")
+            st.bar_chart(p_data.groupby('category')['cost'].sum(), color="#2563EB")
         else:
-            st.info(f"No management data found for {active_property}. Log your first audit in Tab 1.")
-            
-    except Exception as e:
-        st.error(f"Scorecard Display Error: {e}")
+            st.info("No data recorded.")
+    except:
+        st.error("Scorecard error.")
 
-# --- TAB 4: VENDOR DIRECTORY ---
+# --- TAB 4: VENDORS ---
 with tab4:
-    st.subheader("Global Vendor Directory")
-    
-    # 1. Pull current vendor list
+    st.subheader("Vendor Directory")
     try:
         v_data = get_data("vendors").fillna("")
-    except:
-        v_data = pd.DataFrame(columns=["company_name", "service", "name", "phone", "email"])
-
-    # 2. Add New Vendor Form
-    with st.expander("➕ Register New Vendor / Contractor"):
-        with st.form("new_vendor_form", clear_on_submit=True):
-            v_col1, v_col2 = st.columns(2)
-            with v_col1:
-                v_company = st.text_input("Company Name")
-                v_service = st.selectbox("Service Category", ["Plumbing", "Electrical", "HVAC", "Pool", "Landscaping", "General", "AV/Automation"])
-                v_contact = st.text_input("Primary Contact Name")
-            with v_col2:
-                v_phone = st.text_input("Phone Number")
-                v_email = st.text_input("Email Address")
-            
-            if st.form_submit_button("Add Vendor to Workbench Database", use_container_width=True):
-                if v_company:
-                    new_v_row = pd.DataFrame([{
-                        "company_name": v_company,
-                        "service": v_service,
-                        "name": v_contact,
-                        "phone": v_phone,
-                        "email": v_email
-                    }])
-                    updated_v_df = pd.concat([v_data, new_v_row], ignore_index=True)
-                    save_data(updated_v_df, "vendors")
-                    st.success(f"{v_company} added successfully!")
+        with st.expander("Register New Vendor"):
+            with st.form("new_v_form", clear_on_submit=True):
+                v_comp = st.text_input("Company")
+                v_serv = st.selectbox("Service", ["Plumbing", "Electrical", "HVAC", "Pool", "Landscaping", "General"])
+                v_name = st.text_input("Contact")
+                v_ph = st.text_input("Phone")
+                v_em = st.text_input("Email")
+                if st.form_submit_button("Save Vendor", use_container_width=True):
+                    save_data(pd.concat([v_data, pd.DataFrame([{"company_name": v_comp, "service": v_serv, "name": v_name, "phone": v_ph, "email": v_em}])], ignore_index=True), "vendors")
                     st.rerun()
-                else:
-                    st.error("Company Name is required.")
-
-    st.markdown("---")
-
-    # 3. Interactive Directory Table
-    if not v_data.empty:
-        # We use st.data_editor here so you can also edit existing vendor info on the fly
-        st.write("### Active Vendors")
-        st.info("Tip: You can edit vendor details directly in the table below.")
-        
-        edited_vendors = st.data_editor(
-            v_data[["company_name", "service", "name", "phone", "email"]],
-            use_container_width=True,
-            hide_index=True,
-            num_rows="dynamic", # Allows you to delete vendors by selecting the row and hitting 'Delete'
-            key="vendor_editor"
-        )
-        
-        # Save changes if the table is edited
-        if st.button("Save Directory Changes"):
-            save_data(edited_vendors, "vendors")
-            st.success("Vendor directory updated.")
-            st.rerun()
-    else:
-        st.info("No vendors found. Use the form above to add your first contractor.")
+        if not v_data.empty:
+            st.dataframe(v_data[["company_name", "service", "name", "phone", "email"]], use_container_width=True, hide_index=True)
+    except:
+        st.info("No vendors yet.")
