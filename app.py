@@ -270,7 +270,7 @@ with tab3:
             
     except Exception as e:
         st.error(f"Scorecard Error: {e}")
-
+        
 # --- TAB 4: VENDOR DIRECTORY ---
 with tab4:
     st.header("Service Provider Directory")
@@ -279,14 +279,16 @@ with tab4:
     with st.expander("➕ Add New Service Provider"):
         with st.form("new_vendor"):
             v_company = st.text_input("Company Name")
-            v_contact = st.text_input("Contact Person")
-            v_serv = st.selectbox("Service Category", ["Pool", "HVAC", "Landscaping", "Plumbing", "Electrical", "Roofing", "General"])
+            v_contact = st.text_input("Contact Person (Name)")
+            v_serv = st.selectbox("Service Category", ["Pool", "HVAC", "Landscaping", "Plumbing", "Electrical", "Roofing", "Aesthetics", "General"])
             v_phone = st.text_input("Phone Number")
             v_email = st.text_input("Email Address")
             
             if st.form_submit_button("Add to Directory"):
+                # Pull current vendors and handle NaNs
                 v_df = get_data("vendors").fillna("")
                 
+                # Create the new entry
                 new_v = pd.DataFrame([{
                     "company_name": v_company,
                     "name": v_contact,
@@ -295,19 +297,54 @@ with tab4:
                     "email": v_email
                 }])
                 
+                # Merge and Save
                 updated_v = pd.concat([v_df, new_v], ignore_index=True)
                 save_data(updated_v, "vendors")
                 st.success(f"Vendor '{v_company}' saved successfully!")
                 st.rerun()
 
-    # 2. Directory Display
     st.divider()
+
+    # 2. Search and Filter Logic
     try:
+        # Load the directory
         vendors = get_data("vendors").fillna("")
+        
         if not vendors.empty:
-            # Organizing columns for a professional look
-            st.table(vendors[["company_name", "service", "name", "phone", "email"]])
+            # Create two columns for the search/filter UI
+            col_search, col_filter = st.columns([2, 1])
+            
+            with col_search:
+                search_query = st.text_input("🔍 Search Directory", placeholder="Search by company or contact name...")
+            
+            with col_filter:
+                # Create a list of unique categories for the filter
+                unique_categories = ["All"] + sorted(vendors["service"].unique().tolist())
+                category_filter = st.selectbox("Filter by Category", unique_categories)
+
+            # --- Apply Search/Filter Logic ---
+            filtered_df = vendors.copy()
+            
+            if search_query:
+                # Search across both Company and Contact Name
+                filtered_df = filtered_df[
+                    filtered_df['company_name'].str.contains(search_query, case=False) | 
+                    filtered_df['name'].str.contains(search_query, case=False)
+                ]
+            
+            if category_filter != "All":
+                filtered_df = filtered_df[filtered_df['service'] == category_filter]
+
+            # 3. Directory Display Table
+            if not filtered_df.empty:
+                # Reordering columns for professional display
+                display_cols = ["company_name", "service", "name", "phone", "email"]
+                st.table(filtered_df[display_cols])
+            else:
+                st.warning("No vendors found matching those criteria.")
         else:
-            st.info("Your vendor directory is currently empty.")
+            st.info("Your vendor directory is currently empty. Add your first provider above.")
+            
     except Exception as e:
-        st.error("Make sure your 'vendors' worksheet exists in Google Sheets.")
+        st.error(f"Error loading vendor directory: {e}")
+        st.info("Ensure your Google Sheet has a worksheet named 'vendors' with the correct headers.")
