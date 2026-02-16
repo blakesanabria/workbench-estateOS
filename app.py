@@ -192,59 +192,70 @@ with tab3:
         p_data = all_d[all_d["property_name"] == active_property].copy()
         
         if not p_data.empty:
-            # 1. Data Processing
+            # 1. Data Cleaning & Calculations
             p_data['cost'] = pd.to_numeric(p_data['cost'], errors='coerce').fillna(0)
+            
+            total_invested = p_data[p_data['status'] == 'Resolved']['cost'].sum()
+            upcoming_liability = p_data[p_data['status'] != 'Resolved']['cost'].sum()
             resolved_count = len(p_data[p_data['status'] == 'Resolved'])
             total_tasks = len(p_data)
             health_score = int((resolved_count / total_tasks) * 100) if total_tasks > 0 else 0
             
             # 2. Key Performance Indicators (KPIs)
             k1, k2, k3, k4 = st.columns(4)
-            k1.metric("Health Score", f"{health_score}%")
-            k2.metric("Total Cost", f"${p_data['cost'].sum():,.0f}")
-            k3.metric("Resolved", resolved_count)
-            k4.metric("Active Issues", total_tasks - resolved_count)
+            k1.metric("Asset Health", f"{health_score}%")
+            k2.metric("Total Spent", f"${total_invested:,.0f}")
+            k3.metric("Upcoming Liability", f"${upcoming_liability:,.0f}")
+            k4.metric("Active Items", total_tasks - resolved_count)
 
             st.markdown("---")
             
-            # 3. Visual Analysis
-            col_chart, col_crit = st.columns([2, 1])
+            # 3. Financial & Operational Analysis
+            col_chart, col_stat = st.columns([2, 1])
             
             with col_chart:
                 st.subheader("Cost by System")
-                # Grouping by category for a clean bar chart
-                cat_spend = p_data.groupby('category')['cost'].sum().reset_index()
-                st.bar_chart(cat_spend.set_index('category'), color="#00d4ff")
+                # Horizontal bars are easier to read for category names
+                cat_spend = p_data.groupby('category')['cost'].sum().sort_values(ascending=True)
+                st.bar_chart(cat_spend, horizontal=True, color="#00d4ff")
                 
-                with st.expander("View Full Cost Breakdown"):
+                with st.expander("🔍 View Detailed Cost Audit"):
                     st.dataframe(
                         p_data[p_data['cost'] > 0][['item', 'category', 'cost']].sort_values(by='cost', ascending=False),
                         use_container_width=True, hide_index=True
                     )
 
-            with col_crit:
-                st.subheader("Priority Focus")
-                # Highlighting "High" impact items that aren't resolved
-                critical_items = p_data[(p_data['impact'] == 'High') & (p_data['status'] != 'Resolved')]
-                if not critical_items.empty:
-                    for _, row in critical_items.iterrows():
-                        st.error(f"**{row['item']}** \nDue: {row['due_date']}")
-                else:
-                    st.success("No High-Priority issues pending.")
+            with col_stat:
+                st.subheader("System Health Grid")
+                # This shows a count of tasks by status for each category
+                if not p_data.empty:
+                    grid = pd.crosstab(p_data['category'], p_data['status'])
+                    st.dataframe(grid, use_container_width=True)
 
             st.markdown("---")
 
-            # 4. Status Distribution
-            st.subheader("System Status Overview")
-            # This creates a small visual summary of how different systems are doing
-            status_summary = pd.crosstab(p_data['category'], p_data['status'])
-            st.dataframe(status_summary, use_container_width=True)
+            # 4. Critical Attention Burn-Down List
+            st.subheader("⚠️ Priority Focus Items")
+            critical_items = p_data[(p_data['impact'] == 'High') & (p_data['status'] != 'Resolved')]
+            
+            if not critical_items.empty:
+                st.dataframe(
+                    critical_items[['item', 'category', 'due_date', 'cost']],
+                    column_config={
+                        "item": "Task Name",
+                        "due_date": st.column_config.DateColumn("Target Date"),
+                        "cost": st.column_config.NumberColumn("Est. Cost", format="$%d")
+                    },
+                    hide_index=True, use_container_width=True
+                )
+            else:
+                st.success("All high-impact systems are currently stable.")
 
         else:
-            st.info("No data recorded for this property yet.")
+            st.info(f"No management data found for {active_property}. Log your first audit in Tab 1.")
             
     except Exception as e:
-        st.error(f"Scorecard Visualization Error: {e}")
+        st.error(f"Scorecard Display Error: {e}")
 
 # --- TAB 4: VENDOR DIRECTORY ---
 with tab4:
