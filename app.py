@@ -36,14 +36,47 @@ def save_data(df, worksheet):
     conn.update(worksheet=worksheet, data=df)
     st.cache_data.clear()
 
-# --- 3. GLOBAL PROPERTY SELECTOR ---
+# --- GLOBAL PROPERTY SELECTOR ---
 with st.sidebar:
-    st.image("https://via.placeholder.com/150?text=Workbench+Group", width=150) # Optional Logo
-    st.header("Estate Selection")
-    # Add new properties to this list as you expand
-    property_list = ["3739 Knollwood Dr", "Example Property 2"]
-    active_property = st.selectbox("Select Active Estate", property_list)
-    st.info(f"Currently managing: **{active_property}**")
+    st.markdown("## Workbench Group")
+    st.markdown("---")
+    
+    # 1. Fetch properties
+    all_punch_data = get_data("punch_list").fillna("")
+    if not all_punch_data.empty and "property_name" in all_punch_data.columns:
+        existing_properties = sorted([p for p in all_punch_data["property_name"].unique() if p])
+    else:
+        existing_properties = ["3739 Knollwood Dr"]
+
+    # 2. Select Estate (Explicitly setting index=0 removes the 'null' state ?)
+    active_property = st.selectbox(
+        "Active Estate", 
+        existing_properties, 
+        index=0,
+        label_visibility="visible"
+    )
+    
+    st.markdown("---")
+    
+    # 3. Clean Add Property Section
+    st.subheader("Add New Property")
+    new_prop_name = st.text_input("Property Address", key="new_prop_input")
+    
+    if st.button("Initialize Property", use_container_width=True):
+        if new_prop_name and new_prop_name not in existing_properties:
+            seed_row = pd.DataFrame([{
+                "property_name": new_prop_name,
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "category": "Site",
+                "item": "Initial Property Setup",
+                "status": "Resolved",
+                "impact": "Low",
+                "due_date": datetime.now().strftime("%Y-%m-%d"),
+                "cost": 0.0
+            }])
+            full_df = get_data("punch_list").fillna("")
+            save_data(pd.concat([full_df, seed_row], ignore_index=True), "punch_list")
+            st.rerun()
 
 # --- 4. APP LAYOUT ---
 st.set_page_config(page_title=f"Workbench | {active_property}", layout="wide")
