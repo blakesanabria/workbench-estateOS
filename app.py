@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
+from streamlit_calendar import calendar
 
 # --- 1. LOGIN SECURITY ---
 def check_password():
@@ -85,44 +86,88 @@ with tab1:
         st.error(f"Waiting for Google Sheets connection... {e}")
     
 with tab2:
-    st.header("52-Week Maintenance Calendar")
+    st.header("Estate Maintenance Timeline")
     
-    # --- FORM TO ADD NEW TASKS ---
-    with st.expander("➕ Add New Maintenance Task"):
+    try:
+        # 1. Pull data from BOTH sheets
+        punch_data = get_data("punch_list")
+        recurring_data = get_data("master_calendar")
+        
+        calendar_events = []
+
+        # 2. Add Punch List Items (Color-coded by status)
+        if not punch_data.empty:
+            for _, row in punch_data.iterrows():
+                # Define colors: Red for Urgent, Orange for Pending, Green for Resolved
+                status_color = "#ff4b4b" if row['status'] == "Needs Attention" else "#ffa500" if row['status'] == "Pending" else "#28a745"
+                
+                calendar_events.append({
+                    "title": f"🛠️ {row['item']}",
+                    "start": row['due_date'],
+                    "end": row['due_date'],
+                    "color": status_color,
+                    "allDay": True
+                })
+
+        # 3. Add Recurring Guidelines (Professional Blue)
+        if not recurring_data.empty:
+            for _, row in recurring_data.iterrows():
+                calendar_events.append({
+                    "title": f"📅 {row['frequency']}: {row['task']}",
+                    "start": datetime.now().strftime("%Y-%m-%d"), # Defaults to today for general visibility
+                    "color": "#3b82f6",
+                    "allDay": True
+                })
+
+        # 4. Calendar Configuration
+        calendar_options = {
+            "headerToolbar": {
+                "left": "prev,next today",
+                "center": "title",
+                "right": "dayGridMonth,dayGridWeek"
+            },
+            "initialView": "dayGridMonth",
+            "navLinks": True,
+        }
+
+        # 5. Display the Calendar
+        calendar(events=calendar_events, options=calendar_options)
+        
+    except Exception as e:
+        st.error(f"Calendar could not load: {e}")
+
+    st.divider()
+    
+    # --- FORM TO ADD NEW TASKS TO MASTER CALENDAR ---
+    st.subheader("Manage Maintenance Guidelines")
+    with st.expander("➕ Add New Recurring Task"):
         with st.form("new_calendar_task"):
             f_freq = st.selectbox("Frequency", ["Monthly", "Quarterly", "Bi-Annual", "Annual"])
             f_sys = st.selectbox("System", ["Mechanical", "Envelope", "Site", "Life Safety", "Aesthetics"])
             f_task = st.text_input("Task Name")
             f_inst = st.text_area("Special Instructions")
             
-            if st.form_submit_button("Save to Master Calendar"):
-                # 1. Fetch current guidelines
+            if st.form_submit_button("Save to Master Guidelines"):
                 existing_cal = get_data("master_calendar")
-                
-                # 2. Create new row with Calendar headers
                 new_task = pd.DataFrame([{
                     "frequency": f_freq, 
                     "system": f_sys, 
                     "task": f_task, 
                     "instructions": f_inst
                 }])
-                
-                # 3. Merge and Save to the 'master_calendar' worksheet
                 updated_cal = pd.concat([existing_cal, new_task], ignore_index=True)
                 save_data(updated_cal, "master_calendar")
-                
-                st.success("Guideline Added to Google Sheets!")
+                st.success("Guideline Added!")
                 st.rerun()
 
-    # --- DISPLAY THE CALENDAR FROM DATABASE ---
-    st.markdown("---")
-    cal_df = get_data("master_calendar")
-    
-    if not cal_df.empty:
-        # Sort so users see logical grouping
-        st.table(cal_df.sort_values(by="frequency"))
-    else:
-        st.info("Your calendar is currently empty. Use the form above to add your first task.")
+    # --- LIST VIEW OF GUIDELINES ---
+    try:
+        cal_df = get_data("master_calendar")
+        if not cal_df.empty:
+            st.markdown("### Existing Guidelines")
+            st.table(cal_df.sort_values(by="frequency"))
+    except:
+        pass
     
 with tab3:
     st.header(f"Executive Stewardship Report: {datetime.now().strftime('%B %Y')}")
