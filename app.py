@@ -12,7 +12,6 @@ def check_password():
     if st.session_state["password_correct"]:
         return True
 
-    # Password input UI
     st.title("Workbench Group | Estate OS")
     password = st.text_input("Enter Workbench Access Key", type="password")
     if st.button("Unlock Dashboard"):
@@ -29,31 +28,32 @@ if not check_password():
 # --- 2. SECURE DATA CONNECTION ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+# Caching avoids the 'Quota Exceeded' error by only hitting Google once every 5 mins
+@st.cache_data(ttl=300) 
 def get_data(worksheet):
-    # The connection now handles the URL and Credentials automatically from Secrets
-    return conn.read(worksheet=worksheet, ttl="1s")
+    return conn.read(worksheet=worksheet)
 
 def save_data(df, worksheet):
     conn.update(worksheet=worksheet, data=df)
+    # This forces a refresh so new entries show up immediately
     st.cache_data.clear()
-    
+
 # --- 3. APP LAYOUT ---
 st.set_page_config(page_title="Workbench Group | Estate OS", layout="wide")
 st.title("Maintenance Portal: 3739 Knollwood Dr")
 
 tab1, tab2, tab3, tab4 = st.tabs(["Weekly Field Entry", "Master Timeline", "Executive Scorecard", "Vendor Directory"])
 
+# --- TAB 1: FIELD AUDIT & SCHEDULING ---
 with tab1:
     st.header("Field Audit & Scheduling")
     
-    # 1. Fetch Company Names from the Vendor Directory for the dropdown
     try:
         vendor_df = get_data("vendors").fillna("")
         vendor_options = ["Internal / Workbench"] + sorted(vendor_df["company_name"].unique().tolist())
     except:
         vendor_options = ["Internal / Workbench"]
 
-    # 2. Data Entry Form
     with st.form("audit_entry"):
         col1, col2, col3 = st.columns([2, 2, 1]) 
         
@@ -68,14 +68,11 @@ with tab1:
             impact = st.select_slider("Priority Level", options=["Low", "Medium", "High"])
 
         with col3:
-            # New Cost Input field
             task_cost = st.number_input("Cost ($)", min_value=0.0, step=50.0, format="%.2f")
-            st.caption("Budget/Actual")
+            st.caption("Budgeted Amount")
         
         if st.form_submit_button("Log & Schedule Task"):
             df = get_data("punch_list").fillna("")
-            
-            # Formatting task name for the calendar view
             task_display = f"{item} ({assigned_vendor})" if assigned_vendor != "Internal / Workbench" else item
             
             new_row = pd.DataFrame([{
@@ -90,76 +87,61 @@ with tab1:
             
             updated_df = pd.concat([df, new_row], ignore_index=True)
             save_data(updated_df, "punch_list")
-            st.success(f"Task logged for {assigned_vendor} at ${task_cost:,.2f}")
+            st.success(f"Task logged for {assigned_vendor}!")
             st.rerun()
 
-    # 3. Recent Activity Log
     st.markdown("### Recent Activity")
     try:
         history = get_data("punch_list").fillna("")
         if not history.empty:
-            # Displaying a clean subset of the data
             st.table(history[["date", "item", "status", "due_date", "cost"]].tail(5))
         else:
             st.info("No activity logged yet.")
-    except Exception as e:
-        st.error(f"Error loading activity: {e}")
-    
+    except:
+        st.error("Error loading activity log.")
+
+# --- TAB 2: MASTER TIMELINE ---
 with tab2:
     st.header("Estate Maintenance Timeline")
     
     try:
-        # 1. Pull data from BOTH sheets
-        # Pull data and immediately fill empty cells (NaNs) with empty text ""
         punch_data = get_data("punch_list").fillna("")
         recurring_data = get_data("master_calendar").fillna("")
-        
         calendar_events = []
 
-        # 2. Add Punch List Items (Color-coded by status)
         if not punch_data.empty:
             for _, row in punch_data.iterrows():
-                # Define colors: Red for Urgent, Orange for Pending, Green for Resolved
                 status_color = "#ff4b4b" if row['status'] == "Needs Attention" else "#ffa500" if row['status'] == "Pending" else "#28a745"
-                
                 calendar_events.append({
                     "title": f"🛠️ {row['item']}",
-                    "start": row['due_date'],
-                    "end": row['due_date'],
+                    "start": str(row['due_date']),
+                    "end": str(row['due_date']),
                     "color": status_color,
                     "allDay": True
                 })
 
-        # 3. Add Recurring Guidelines (Professional Blue)
         if not recurring_data.empty:
             for _, row in recurring_data.iterrows():
                 calendar_events.append({
                     "title": f"📅 {row['frequency']}: {row['task']}",
-                    "start": datetime.now().strftime("%Y-%m-%d"), # Defaults to today for general visibility
+                    "start": datetime.now().strftime("%Y-%m-%d"),
                     "color": "#3b82f6",
                     "allDay": True
                 })
 
-        # 4. Calendar Configuration
         calendar_options = {
-            "headerToolbar": {
-                "left": "prev,next today",
-                "center": "title",
-                "right": "dayGridMonth,dayGridWeek"
-            },
+            "headerToolbar": {"left": "prev,next today", "center": "title", "right": "dayGridMonth,dayGridWeek"},
             "initialView": "dayGridMonth",
             "navLinks": True,
+            "contentHeight": "auto", # Ensures it doesn't get cut off
         }
 
-        # 5. Display the Calendar
-        calendar(events=calendar_events, options=calendar_options)
+        calendar(events=calendar_events, options=calendar_options, height=700)
         
     except Exception as e:
         st.error(f"Calendar could not load: {e}")
 
     st.divider()
-    
-    # --- FORM TO ADD NEW TASKS TO MASTER CALENDAR ---
     st.subheader("Manage Maintenance Guidelines")
     with st.expander("➕ Add New Recurring Task"):
         with st.form("new_calendar_task"):
@@ -169,59 +151,38 @@ with tab2:
             f_inst = st.text_area("Special Instructions")
             
             if st.form_submit_button("Save to Master Guidelines"):
-                existing_cal = get_data("master_calendar")
-                new_task = pd.DataFrame([{
-                    "frequency": f_freq, 
-                    "system": f_sys, 
-                    "task": f_task, 
-                    "instructions": f_inst
-                }])
+                existing_cal = get_data("master_calendar").fillna("")
+                new_task = pd.DataFrame([{"frequency": f_freq, "system": f_sys, "task": f_task, "instructions": f_inst}])
                 updated_cal = pd.concat([existing_cal, new_task], ignore_index=True)
                 save_data(updated_cal, "master_calendar")
                 st.success("Guideline Added!")
                 st.rerun()
 
-    # --- LIST VIEW OF GUIDELINES ---
-    try:
-        cal_df = get_data("master_calendar")
-        if not cal_df.empty:
-            st.markdown("### Existing Guidelines")
-            st.table(cal_df.sort_values(by="frequency"))
-    except:
-        pass
-    
+# --- TAB 3: EXECUTIVE SCORECARD ---
 with tab3:
     st.header(f"Executive Stewardship Report: {datetime.now().strftime('%B %Y')}")
     
     try:
         all_data = get_data("punch_list").fillna("")
-        
         if not all_data.empty:
-            # 1. DATA PROCESSING
-            # Ensure cost column is numeric for calculation
             all_data['cost'] = pd.to_numeric(all_data['cost'], errors='coerce').fillna(0)
-            
             total_items = len(all_data)
             urgent_count = len(all_data[all_data['status'] == 'Needs Attention'])
             resolved_count = len(all_data[all_data['status'] == 'Resolved'])
             total_spend = all_data['cost'].sum()
             health_score = (resolved_count / total_items) * 100 if total_items > 0 else 0
 
-            # 2. EXECUTIVE SUMMARY
             if urgent_count > 0:
-                st.info(f"**Status Update:** We are currently managing **{urgent_count}** urgent items. Total maintenance investment for this period is **${total_spend:,.2f}**.")
+                st.info(f"**Status Update:** Managing **{urgent_count}** urgent items. Total investment: **${total_spend:,.2f}**.")
             else:
-                st.success(f"**Status Update:** Property systems are stable. Total maintenance investment: **${total_spend:,.2f}**.")
+                st.success(f"**Status Update:** Systems stable. Total investment: **${total_spend:,.2f}**.")
 
-            # 3. HIGH-LEVEL METRICS
             m1, m2, m3 = st.columns(3)
             m1.metric("Total Observations", total_items)
             m2.metric("Total Investment", f"${total_spend:,.2f}")
             m3.metric("Asset Health Score", f"{int(health_score)}%")
 
             st.divider()
-
-            # 4. THE STATUS BOARD
             col_a, col_b, col_c = st.columns(3)
             
             with col_a:
@@ -229,118 +190,75 @@ with tab3:
                 resolved_df = all_data[all_data['status'] == 'Resolved']
                 for _, row in resolved_df.tail(5).iterrows():
                     st.write(f"✅ **{row['category']}:** {row['item']}")
-                    st.caption(f"Completed: {row['date']} | Cost: ${row['cost']:,.2f}")
+                    st.caption(f"Cost: ${row['cost']:,.2f}")
                     
             with col_b:
                 st.markdown("### 🟡 MONITORING")
                 pending_df = all_data[all_data['status'] == 'Pending']
                 for _, row in pending_df.tail(5).iterrows():
                     st.write(f"⏳ **{row['category']}:** {row['item']}")
-                    st.caption(f"Target: {row['due_date']} | Est. Cost: ${row['cost']:,.2f}")
+                    st.caption(f"Target: {row['due_date']} | Est: ${row['cost']:,.2f}")
                     
             with col_c:
                 st.markdown("### 🔴 ACTION REQUIRED")
                 critical_df = all_data[all_data['status'] == 'Needs Attention']
                 for _, row in critical_df.iterrows():
-                    # Calculate overdue status
                     try:
                         target = pd.to_datetime(row['due_date']).date()
                         days_diff = (datetime.now().date() - target).days
                         overdue_msg = f":red[**{days_diff} DAYS OVERDUE**]" if days_diff > 0 else f"Target: {target.strftime('%b %d')}"
                     except:
                         overdue_msg = "Target: TBD"
-                        
                     prefix = "🚨" if row['impact'] == "High" else "⚠️"
                     st.write(f"{prefix} **{row['category']}:** {row['item']}")
                     st.caption(f"{overdue_msg} | Est: ${row['cost']:,.2f}")
                     st.divider()
 
-            # 5. FINANCIAL BREAKDOWN CHART
             st.divider()
             st.subheader("Investment by Property System")
             cost_chart_data = all_data.groupby('category')['cost'].sum()
             st.bar_chart(cost_chart_data)
-
         else:
-            st.info("Log your first field entry to generate the scorecard.")
-            
+            st.info("No data available for report.")
     except Exception as e:
         st.error(f"Scorecard Error: {e}")
-        
+
 # --- TAB 4: VENDOR DIRECTORY ---
 with tab4:
     st.header("Service Provider Directory")
-    
-    # 1. Add New Vendor Form
     with st.expander("➕ Add New Service Provider"):
         with st.form("new_vendor"):
             v_company = st.text_input("Company Name")
-            v_contact = st.text_input("Contact Person (Name)")
+            v_contact = st.text_input("Contact Person")
             v_serv = st.selectbox("Service Category", ["Pool", "HVAC", "Landscaping", "Plumbing", "Electrical", "Roofing", "Aesthetics", "General"])
             v_phone = st.text_input("Phone Number")
             v_email = st.text_input("Email Address")
-            
             if st.form_submit_button("Add to Directory"):
-                # Pull current vendors and handle NaNs
                 v_df = get_data("vendors").fillna("")
-                
-                # Create the new entry
-                new_v = pd.DataFrame([{
-                    "company_name": v_company,
-                    "name": v_contact,
-                    "service": v_serv,
-                    "phone": v_phone,
-                    "email": v_email
-                }])
-                
-                # Merge and Save
+                new_v = pd.DataFrame([{"company_name": v_company, "name": v_contact, "service": v_serv, "phone": v_phone, "email": v_email}])
                 updated_v = pd.concat([v_df, new_v], ignore_index=True)
                 save_data(updated_v, "vendors")
-                st.success(f"Vendor '{v_company}' saved successfully!")
+                st.success(f"Vendor '{v_company}' saved!")
                 st.rerun()
 
     st.divider()
-
-    # 2. Search and Filter Logic
     try:
-        # Load the directory
         vendors = get_data("vendors").fillna("")
-        
         if not vendors.empty:
-            # Create two columns for the search/filter UI
             col_search, col_filter = st.columns([2, 1])
-            
             with col_search:
-                search_query = st.text_input("🔍 Search Directory", placeholder="Search by company or contact name...")
-            
+                search_query = st.text_input("🔍 Search Directory")
             with col_filter:
-                # Create a list of unique categories for the filter
-                unique_categories = ["All"] + sorted(vendors["service"].unique().tolist())
-                category_filter = st.selectbox("Filter by Category", unique_categories)
-
-            # --- Apply Search/Filter Logic ---
+                category_filter = st.selectbox("Filter", ["All"] + sorted(vendors["service"].unique().tolist()))
+            
             filtered_df = vendors.copy()
-            
             if search_query:
-                # Search across both Company and Contact Name
-                filtered_df = filtered_df[
-                    filtered_df['company_name'].str.contains(search_query, case=False) | 
-                    filtered_df['name'].str.contains(search_query, case=False)
-                ]
-            
+                filtered_df = filtered_df[filtered_df['company_name'].str.contains(search_query, case=False) | filtered_df['name'].str.contains(search_query, case=False)]
             if category_filter != "All":
                 filtered_df = filtered_df[filtered_df['service'] == category_filter]
-
-            # 3. Directory Display Table
-            if not filtered_df.empty:
-                # Reordering columns for professional display
-                display_cols = ["company_name", "service", "name", "phone", "email"]
-                st.table(filtered_df[display_cols])
-            else:
-                st.warning("No vendors found matching those criteria.")
-        else:
-            st.info("Your vendor directory is currently empty. Add your first provider above.")
             
-    except Exception as e:
-        st.error(f"Error loading vendor directory: {e}")
-        st.info("Ensure your Google Sheet has a worksheet named 'vendors' with the correct headers.")
+            st.table(filtered_df[["company_name", "service", "name", "phone", "email"]])
+        else:
+            st.info("Directory is empty.")
+    except:
+        st.error("Could not load vendors.")
