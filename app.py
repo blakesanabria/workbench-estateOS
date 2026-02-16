@@ -90,8 +90,9 @@ with tab2:
     
     try:
         # 1. Pull data from BOTH sheets
-        punch_data = get_data("punch_list")
-        recurring_data = get_data("master_calendar")
+        # Pull data and immediately fill empty cells (NaNs) with empty text ""
+        punch_data = get_data("punch_list").fillna("")
+        recurring_data = get_data("master_calendar").fillna("")
         
         calendar_events = []
 
