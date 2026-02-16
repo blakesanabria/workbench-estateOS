@@ -129,14 +129,21 @@ with tab2:
                     "allDay": True
                 })
 
+        # 4. Calendar Configuration (Height is now INSIDE options)
         calendar_options = {
-            "headerToolbar": {"left": "prev,next today", "center": "title", "right": "dayGridMonth,dayGridWeek"},
+            "headerToolbar": {
+                "left": "prev,next today", 
+                "center": "title", 
+                "right": "dayGridMonth,dayGridWeek"
+            },
             "initialView": "dayGridMonth",
             "navLinks": True,
-            "contentHeight": "auto", # Ensures it doesn't get cut off
+            "height": 650,  # This tells the calendar to be 650px tall
         }
 
-        calendar(events=calendar_events, options=calendar_options, height=700)
+        # 5. Display the Calendar (Function call simplified)
+        # We removed height=700 from here to fix your error
+        calendar(events=calendar_events, options=calendar_options)
         
     except Exception as e:
         st.error(f"Calendar could not load: {e}")
