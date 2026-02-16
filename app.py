@@ -183,24 +183,68 @@ with tab2:
             st.dataframe(prop_r[["frequency", "system", "task", "instructions"]].sort_values(by="frequency"), use_container_width=True, hide_index=True)
     except Exception as e:
         st.error(f"Timeline/Guideline error: {e}")
-
-# --- TAB 3: SCORECARD ---
+        
+# --- TAB 3: EXECUTIVE SCORECARD ---
 with tab3:
+    st.header(f"Monthly Report: {active_property}")
     try:
         all_d = get_data("punch_list").fillna("")
         p_data = all_d[all_d["property_name"] == active_property].copy()
+        
         if not p_data.empty:
+            # 1. Data Processing
             p_data['cost'] = pd.to_numeric(p_data['cost'], errors='coerce').fillna(0)
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Active Tasks", len(p_data[p_data['status'] != 'Resolved']))
-            m2.metric("Investment", f"${p_data['cost'].sum():,.2f}")
-            m3.metric("Asset Health", f"{int((len(p_data[p_data['status'] == 'Resolved'])/len(p_data))*100)}%")
-            st.divider()
-            st.bar_chart(p_data.groupby('category')['cost'].sum())
+            resolved_count = len(p_data[p_data['status'] == 'Resolved'])
+            total_tasks = len(p_data)
+            health_score = int((resolved_count / total_tasks) * 100) if total_tasks > 0 else 0
+            
+            # 2. Key Performance Indicators (KPIs)
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Health Score", f"{health_score}%")
+            k2.metric("Total Cost", f"${p_data['cost'].sum():,.0f}")
+            k3.metric("Resolved", resolved_count)
+            k4.metric("Active Issues", total_tasks - resolved_count)
+
+            st.markdown("---")
+            
+            # 3. Visual Analysis
+            col_chart, col_crit = st.columns([2, 1])
+            
+            with col_chart:
+                st.subheader("Cost by System")
+                # Grouping by category for a clean bar chart
+                cat_spend = p_data.groupby('category')['cost'].sum().reset_index()
+                st.bar_chart(cat_spend.set_index('category'), color="#00d4ff")
+                
+                with st.expander("View Full Cost Breakdown"):
+                    st.dataframe(
+                        p_data[p_data['cost'] > 0][['item', 'category', 'cost']].sort_values(by='cost', ascending=False),
+                        use_container_width=True, hide_index=True
+                    )
+
+            with col_crit:
+                st.subheader("Priority Focus")
+                # Highlighting "High" impact items that aren't resolved
+                critical_items = p_data[(p_data['impact'] == 'High') & (p_data['status'] != 'Resolved')]
+                if not critical_items.empty:
+                    for _, row in critical_items.iterrows():
+                        st.error(f"**{row['item']}** \nDue: {row['due_date']}")
+                else:
+                    st.success("No High-Priority issues pending.")
+
+            st.markdown("---")
+
+            # 4. Status Distribution
+            st.subheader("System Status Overview")
+            # This creates a small visual summary of how different systems are doing
+            status_summary = pd.crosstab(p_data['category'], p_data['status'])
+            st.dataframe(status_summary, use_container_width=True)
+
         else:
-            st.info("No data recorded.")
-    except:
-        st.error("Scorecard error.")
+            st.info("No data recorded for this property yet.")
+            
+    except Exception as e:
+        st.error(f"Scorecard Visualization Error: {e}")
 
 # --- TAB 4: VENDOR DIRECTORY ---
 with tab4:
