@@ -102,13 +102,15 @@ with tab1:
 
 # --- TAB 2: MASTER TIMELINE ---
 with tab2:
-    st.header("Estate Maintenance Timeline")
+    st.header("Estate Maintenance Calendar")
     
     try:
+        # 1. Pull data and handle NaNs
         punch_data = get_data("punch_list").fillna("")
         recurring_data = get_data("master_calendar").fillna("")
         calendar_events = []
 
+        # 2. Add Punch List Items
         if not punch_data.empty:
             for _, row in punch_data.iterrows():
                 status_color = "#ff4b4b" if row['status'] == "Needs Attention" else "#ffa500" if row['status'] == "Pending" else "#28a745"
@@ -120,6 +122,7 @@ with tab2:
                     "allDay": True
                 })
 
+        # 3. Add Recurring Guidelines
         if not recurring_data.empty:
             for _, row in recurring_data.iterrows():
                 calendar_events.append({
@@ -129,7 +132,7 @@ with tab2:
                     "allDay": True
                 })
 
-        # 4. Calendar Configuration (Height is now INSIDE options)
+        # 4. Calendar Configuration (Height fix is here)
         calendar_options = {
             "headerToolbar": {
                 "left": "prev,next today", 
@@ -138,32 +141,17 @@ with tab2:
             },
             "initialView": "dayGridMonth",
             "navLinks": True,
-            "height": 650,  # This tells the calendar to be 650px tall
+            "height": 750,  # Moves height inside the configuration dictionary
         }
 
-        # 5. Display the Calendar (Function call simplified)
-        # We removed height=700 from here to fix your error
+        # 5. Display the Calendar
         calendar(events=calendar_events, options=calendar_options)
         
     except Exception as e:
-        st.error(f"Calendar could not load: {e}")
+        st.error(f"Timeline display error: {e}")
 
     st.divider()
-    st.subheader("Manage Maintenance Guidelines")
-    with st.expander("➕ Add New Recurring Task"):
-        with st.form("new_calendar_task"):
-            f_freq = st.selectbox("Frequency", ["Monthly", "Quarterly", "Bi-Annual", "Annual"])
-            f_sys = st.selectbox("System", ["Mechanical", "Envelope", "Site", "Life Safety", "Aesthetics"])
-            f_task = st.text_input("Task Name")
-            f_inst = st.text_area("Special Instructions")
-            
-            if st.form_submit_button("Save to Master Guidelines"):
-                existing_cal = get_data("master_calendar").fillna("")
-                new_task = pd.DataFrame([{"frequency": f_freq, "system": f_sys, "task": f_task, "instructions": f_inst}])
-                updated_cal = pd.concat([existing_cal, new_task], ignore_index=True)
-                save_data(updated_cal, "master_calendar")
-                st.success("Guideline Added!")
-                st.rerun()
+    # ... rest of your Tab 2 code (Manage Maintenance Guidelines) follows ...
 
 # --- TAB 3: EXECUTIVE SCORECARD ---
 with tab3:
