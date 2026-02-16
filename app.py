@@ -42,7 +42,7 @@ def save_data(df, worksheet):
 st.set_page_config(page_title="Workbench Group | Estate OS", layout="wide")
 st.title("Maintenance Portal: 3739 Knollwood Dr")
 
-tab1, tab2, tab3, tab4 = st.tabs(["Weekly Field Entry", "Master Timeline", "Executive Scorecard", "Vendor Directory"])
+tab1, tab2, tab3, tab4 = st.tabs(["Weekly Field Entry", "Calendar", "Monthly Scorecard", "Vendor Directory"])
 
 # --- TAB 1: FIELD AUDIT & SCHEDULING ---
 with tab1:
@@ -102,7 +102,7 @@ with tab1:
 
 # --- TAB 2: MASTER TIMELINE ---
 with tab2:
-    st.header("Estate Maintenance Calendar")
+    st.header("Estate Maintenance Timeline")
     
     try:
         # 1. Pull data and handle NaNs
@@ -110,7 +110,7 @@ with tab2:
         recurring_data = get_data("master_calendar").fillna("")
         calendar_events = []
 
-        # 2. Add Punch List Items
+        # 2. Add Punch List Items (Repairs/Tasks)
         if not punch_data.empty:
             for _, row in punch_data.iterrows():
                 status_color = "#ff4b4b" if row['status'] == "Needs Attention" else "#ffa500" if row['status'] == "Pending" else "#28a745"
@@ -122,7 +122,7 @@ with tab2:
                     "allDay": True
                 })
 
-        # 3. Add Recurring Guidelines
+        # 3. Add Recurring Guidelines (Blue banners)
         if not recurring_data.empty:
             for _, row in recurring_data.iterrows():
                 calendar_events.append({
@@ -132,7 +132,7 @@ with tab2:
                     "allDay": True
                 })
 
-        # 4. Calendar Configuration (Height fix is here)
+        # 4. Calendar Configuration
         calendar_options = {
             "headerToolbar": {
                 "left": "prev,next today", 
@@ -141,7 +141,7 @@ with tab2:
             },
             "initialView": "dayGridMonth",
             "navLinks": True,
-            "height": 750,  # Moves height inside the configuration dictionary
+            "height": 750, 
         }
 
         # 5. Display the Calendar
@@ -151,7 +151,42 @@ with tab2:
         st.error(f"Timeline display error: {e}")
 
     st.divider()
-    # ... rest of your Tab 2 code (Manage Maintenance Guidelines) follows ...
+    
+    # --- MISSING SECTION: MANAGE MAINTENANCE GUIDELINES ---
+    st.subheader("Manage Maintenance Guidelines")
+    
+    # Form to add new standards
+    with st.expander("➕ Add New Recurring Task"):
+        with st.form("new_calendar_task"):
+            f_freq = st.selectbox("Frequency", ["Monthly", "Quarterly", "Bi-Annual", "Annual"])
+            f_sys = st.selectbox("System", ["Mechanical", "Envelope", "Site", "Life Safety", "Aesthetics"])
+            f_task = st.text_input("Task Name", placeholder="e.g., Clean Gutters")
+            f_inst = st.text_area("Special Instructions", placeholder="Tools needed, specific vendors, etc.")
+            
+            if st.form_submit_button("Save to Master Guidelines"):
+                existing_cal = get_data("master_calendar").fillna("")
+                new_task = pd.DataFrame([{
+                    "frequency": f_freq, 
+                    "system": f_sys, 
+                    "task": f_task, 
+                    "instructions": f_inst
+                }])
+                updated_cal = pd.concat([existing_cal, new_task], ignore_index=True)
+                save_data(updated_cal, "master_calendar")
+                st.success(f"Standard added: {f_task}")
+                st.rerun()
+
+    # Table view of all existing guidelines
+    st.markdown("### Existing Guidelines")
+    try:
+        cal_df = get_data("master_calendar").fillna("")
+        if not cal_df.empty:
+            # Sorting by frequency makes it easier for the Monrads to read
+            st.table(cal_df.sort_values(by="frequency"))
+        else:
+            st.info("No recurring guidelines established yet.")
+    except Exception as e:
+        st.warning("Could not load guidelines table. Check 'master_calendar' worksheet.")
 
 # --- TAB 3: EXECUTIVE SCORECARD ---
 with tab3:
